@@ -9,7 +9,6 @@ import { ArrowBackIcon, AddIcon, DeleteIcon, SearchIcon } from '@chakra-ui/icons
 import api from '../../../services/api';
 import PatientHistoryView from './PatientHistoryView';
 import DiseaseSearchModal from './DiseaseSearchModal';
-import { useAuth } from '../../../context/AuthContext';
 
 export default function ConsultationView({ visit, onBack, onComplete }) {
   const [formData, setFormData] = useState({
@@ -44,8 +43,9 @@ export default function ConsultationView({ visit, onBack, onComplete }) {
   
   // Disease search modal
   const { isOpen: isDiseaseSearchOpen, onOpen: onDiseaseSearchOpen, onClose: onDiseaseSearchClose } = useDisclosure();
-  const { getToken } = useAuth();
-  const doctorToken = getToken('doctor');
+  
+  // Get doctor token from localStorage
+  const doctorToken = localStorage.getItem('token_doctor');
 
   const handleDiseaseSelect = (disease) => {
     setFormData(prev => ({

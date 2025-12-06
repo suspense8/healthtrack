@@ -1,6 +1,7 @@
 const prisma = require('../../config/database');
 const { logAction } = require('../shared/auditLogger');
 const vectorSearchService = require('../../services/vectorSearch.service');
+const notificationService = require('../../services/notification.service');
 
 const getQueue = async (req, res) => {
   try {
@@ -132,6 +133,29 @@ const submitConsultation = async (req, res) => {
         lab_orders_count: lab_orders?.length || 0
       }
     });
+
+    // Get patient info for notifications
+    const patient = await prisma.patient.findUnique({
+      where: { patient_id: patient_id },
+      select: { first_name: true, last_name: true, patient_id: true }
+    });
+
+    // Notify pharmacy if prescriptions were created
+    if (patient && prescriptions && prescriptions.length > 0) {
+      notificationService.notifyPrescriptionCreated(patient, prescriptions.length);
+    }
+
+    // Notify lab for each lab order
+    if (patient && lab_orders && lab_orders.length > 0) {
+      for (const labOrder of lab_orders) {
+        notificationService.notifyLabOrderCreated(patient, labOrder.test_type, labOrder.urgency || 'Routine');
+      }
+    }
+
+    // Notify nurse if admission was requested
+    if (patient && disposition === 'Admitted') {
+      notificationService.notifyAdmissionRequested(patient, 'Ward');
+    }
 
     res.json({ message: 'Consultation submitted successfully', visit_id });
   } catch (error) {

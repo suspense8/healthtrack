@@ -11,4 +11,16 @@ router.use(authorizeRoles('admin', 'nurse'));
 router.get('/queue', nursesController.getQueue);
 router.post('/vitals', nursesController.updateVitals);
 
+// Ward management
+router.get('/wards', nursesController.getWards);
+router.post('/wards', nursesController.createWard);
+router.put('/wards/:ward_id', nursesController.updateWard);
+
+// Bed management
+router.get('/wards/:ward_id/beds', nursesController.getBeds);
+router.post('/wards/:ward_id/beds', nursesController.addBed);
+router.put('/beds/:bed_id', nursesController.updateBed);
+router.delete('/beds/:bed_id', nursesController.deleteBed);
+
 module.exports = router;
+

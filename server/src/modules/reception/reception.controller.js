@@ -1,5 +1,6 @@
 const prisma = require('../../config/database');
 const { logAction } = require('../shared/auditLogger');
+const notificationService = require('../../services/notification.service');
 
 // --- Patient Management ---
 
@@ -316,6 +317,16 @@ const checkIn = async (req, res) => {
         queue_status: visit.queue_status
       }
     });
+
+    // Notify nurses about new patient in queue
+    const patient = await prisma.patient.findUnique({
+      where: { patient_id: parseInt(patient_id) },
+      select: { first_name: true, last_name: true, patient_id: true }
+    });
+    
+    if (patient) {
+      notificationService.notifyPatientQueued(patient, visit.queue_number, visit.is_emergency);
+    }
 
     res.status(201).json(visit);
   } catch (error) {
