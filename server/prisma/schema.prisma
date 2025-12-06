@@ -1,0 +1,265 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model Patient {
+  patient_id              Int       @id @default(autoincrement())
+  first_name              String    @db.VarChar(150)
+  last_name               String    @db.VarChar(150)
+  middle_name             String?   @db.VarChar(150)
+  date_of_birth           DateTime? @db.Date
+  gender                  String?   @db.VarChar(16)
+  national_id             String?   @unique @db.VarChar(64)
+  patient_type            String    @db.VarChar(32)
+  phone_number            String?   @db.VarChar(32)
+  email                   String?   @db.VarChar(255)
+  address                 String?   @db.Text
+  emergency_contact_name  String?   @db.VarChar(150)
+  emergency_contact_phone String?   @db.VarChar(32)
+  allergies               String?   @db.Text
+  existing_conditions     String?   @db.Text
+  first_visit             Boolean   @default(true)
+  partial_profile         Boolean   @default(false)
+  is_temp_record          Boolean   @default(false)
+  id_verification_status  String?   @db.VarChar(32)
+  date_registered         DateTime  @default(now())
+  created_by              Int?
+  updated_at              DateTime  @default(now()) @updatedAt
+
+  appointments  Appointment[]
+  visits        AttendanceLog[]
+  lab_orders    LabOrder[]
+  prescriptions Prescription[]
+
+  @@index([first_name, last_name])
+  @@index([phone_number])
+}
+
+model Appointment {
+  appointment_id Int      @id @default(autoincrement())
+  patient_id     Int
+  doctor_id      Int?
+  scheduled_date DateTime
+  created_by     Int?
+  status         String   @default("Scheduled") @db.VarChar(32)
+  reason         String?  @db.Text
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now()) @updatedAt
+
+  patient Patient @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@index([scheduled_date])
+}
+
+model AttendanceLog {
+  visit_id       Int      @id @default(autoincrement())
+  patient_id     Int
+  visit_date     DateTime @default(now())
+  visit_time     DateTime @default(now())
+  visit_reason   String?  @db.Text
+  is_emergency   Boolean  @default(false)
+  referred_by    String?  @db.VarChar(128)
+  visit_type     String   @default("Walk-in") @db.VarChar(32)
+  appointment_id Int?
+  queue_number   Int
+  queue_status   String   @default("Waiting") @db.VarChar(32)
+  needs_vitals   Boolean  @default(true)
+  no_show        Boolean  @default(false)
+  created_by     Int?
+  created_at     DateTime @default(now())
+
+  patient Patient @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@index([patient_id])
+  @@index([queue_status])
+
+  // --- Medical Data ---
+
+  // Vitals
+  systolic_bp       Int?
+  diastolic_bp      Int?
+  heart_rate        Int?
+  respiratory_rate  Int?
+  temperature       Float?
+  oxygen_saturation Int?
+  weight            Float?
+  height            Float?
+
+  // Triage
+  triage_level String? @db.VarChar(16) // Red, Yellow, Green
+  nurse_notes  String? @db.Text
+
+  // Consultation
+  symptoms        String? @db.Text
+  physical_exam   String? @db.Text
+  doctor_notes    String? @db.Text
+  diagnosis       String? @db.Text
+  treatment_plan  String? @db.Text
+  disposition     String? @db.VarChar(32) // Admitted, Discharged, Transferred, Referred
+  referral_dest   String? @db.VarChar(128)
+  admission_notes String? @db.Text
+
+  // Relations
+  lab_orders    LabOrder[]
+  prescriptions Prescription[]
+}
+
+model LabOrder {
+  order_id      Int      @id @default(autoincrement())
+  visit_id      Int
+  patient_id    Int
+  test_type     String   @db.VarChar(128)
+  urgency       String   @default("Routine") @db.VarChar(32)
+  status        String   @default("Pending") @db.VarChar(32)
+  results       String?  @db.Text
+  ordered_by    Int?
+  technician_id Int?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  visit   AttendanceLog @relation(fields: [visit_id], references: [visit_id], onDelete: Cascade)
+  patient Patient       @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+}
+
+model Prescription {
+  prescription_id Int      @id @default(autoincrement())
+  visit_id        Int
+  patient_id      Int
+  medication_name String   @db.VarChar(128)
+  dosage          String   @db.VarChar(64)
+  frequency       String   @db.VarChar(64)
+  duration        String   @db.VarChar(64)
+  quantity        Int?
+  instructions    String?  @db.Text
+  status          String   @default("Pending") @db.VarChar(32)
+  prescribed_by   Int?
+  pharmacist_id   Int?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  visit   AttendanceLog @relation(fields: [visit_id], references: [visit_id], onDelete: Cascade)
+  patient Patient       @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+}
+
+model ReceptionAudit {
+  audit_id        Int      @id @default(autoincrement())
+  user_id         Int?
+  action          String   @db.VarChar(64)
+  entity          String   @db.VarChar(64)
+  entity_id       Int?
+  before_snapshot String?  @db.Text
+  after_snapshot  String?  @db.Text
+  created_at      DateTime @default(now())
+}
+
+model User {
+  user_id       Int      @id @default(autoincrement())
+  username      String   @unique @db.VarChar(50)
+  password_hash String   @db.VarChar(255)
+  role          String   @default("receptionist") @db.VarChar(20)
+  created_at    DateTime @default(now())
+}
+
+// ============== ADMISSION SYSTEM ==============
+
+model Ward {
+  ward_id     Int      @id @default(autoincrement())
+  ward_name   String   @unique @db.VarChar(64)
+  ward_type   String   @db.VarChar(32)
+  total_beds  Int      @default(10)
+  description String?  @db.Text
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  beds       Bed[]
+  admissions Admission[]
+}
+
+model Bed {
+  bed_id     Int      @id @default(autoincrement())
+  ward_id    Int
+  bed_number String   @db.VarChar(16)
+  status     String   @default("Available") @db.VarChar(32)
+  notes      String?  @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  ward       Ward        @relation(fields: [ward_id], references: [ward_id], onDelete: Cascade)
+  admissions Admission[]
+
+  @@unique([ward_id, bed_number])
+}
+
+model Admission {
+  admission_id     Int       @id @default(autoincrement())
+  patient_id       Int
+  visit_id         Int
+  ward_id          Int
+  bed_id           Int?
+  admission_status String    @default("Pending") @db.VarChar(32)
+  priority         String    @default("Normal") @db.VarChar(16)
+  admission_reason String    @db.Text
+  initial_orders   String?   @db.Text
+  doctor_id        Int
+  nurse_id         Int?
+  requested_at     DateTime  @default(now())
+  admitted_at      DateTime?
+  discharged_at    DateTime?
+  discharge_summary String?  @db.Text
+  discharge_meds    String?  @db.Text
+  follow_up_date    DateTime?
+  rejection_reason  String?  @db.Text
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  ward  Ward  @relation(fields: [ward_id], references: [ward_id], onDelete: Cascade)
+  bed   Bed?  @relation(fields: [bed_id], references: [bed_id], onDelete: SetNull)
+  notes AdmissionNote[]
+
+  @@index([patient_id])
+  @@index([admission_status])
+  @@index([ward_id])
+}
+
+model AdmissionNote {
+  note_id           Int      @id @default(autoincrement())
+  admission_id      Int
+  user_id           Int
+  note_type         String   @db.VarChar(32)
+  content           String   @db.Text
+  systolic_bp       Int?
+  diastolic_bp      Int?
+  heart_rate        Int?
+  temperature       Float?
+  oxygen_saturation Int?
+  created_at        DateTime @default(now())
+
+  admission Admission @relation(fields: [admission_id], references: [admission_id], onDelete: Cascade)
+
+  @@index([admission_id])
+}
+
+// ============== DISEASE VECTOR SEARCH ==============
+
+model Disease {
+  id          Int     @id @default(autoincrement())
+  name        String  @db.VarChar(255)
+  description String  @db.Text
+  extract     String? @db.Text
+  symptoms    String? @db.Text
+  wikipedia_url String? @db.VarChar(512)
+  
+  // Vector embedding for semantic search (384 dimensions for MiniLM)
+  embedding   Unsupported("vector(384)")?
+
+  created_at  DateTime @default(now())
+
+  @@map("diseases")
+}

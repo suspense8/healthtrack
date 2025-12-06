@@ -1,0 +1,316 @@
+Clinical System Enhancement - Unit-Aware Capacity Tracking
+Goal
+Transform the Njala University Clinic reception system from a basic patient check-in and queue management application into a comprehensive unit-aware capacity tracking system that addresses:
+
+Multi-unit clinic operations: Support for 10+ units (Emergency, Laboratory, Pharmacy, Antenatal, Post-natal, Male/Female/Children Wards, PHD, Reception)
+Staff & resource constraints: Track 20 staff members across roles, bed/mattress availability, and critical equipment (oxygen, stretchers)
+Capacity-aware workflows: Bed reservations, admission waitlists, equipment requests, and unit-based triage
+Operational visibility: Real-time analytics for bed utilization, staff-to-patient ratios, queue metrics, and incident reporting
+The system currently handles patient registration, check-in, queue management, and attendance records. This enhancement adds the critical operational layer needed for resource-constrained clinical settings.
+
+User Review Required
+IMPORTANT
+
+Breaking Changes to AttendanceLog Model The existing AttendanceLog model will be extended with new fields (destination_unit, is_outpatient, admission_reserved, priority_level). While backward compatible (all fields nullable except defaults), this changes the check-in workflow semantics. Existing attendance records will default to is_outpatient = true and destination_unit = null (interpreted as Outpatient/Reception).
+
+WARNING
+
+Queue Number Logic Change Queue numbering will become unit-specific rather than global daily numbering. This affects queue board display and patient expectations. Consider communication strategy for rollout.
+
+IMPORTANT
+
+New Required Data Entry: Staff Roster The system will require daily/shift-based staff roster entry (StaffShift table) to enable capacity-aware wait time estimates and staff-to-patient analytics. Without this data, wait time estimates will fall back to static defaults.
+
+Proposed Changes
+Database Layer (Prisma Schema)
+[MODIFY] 
+schema.prisma
+Add 8 new models and extend 1 existing model:
+
+New Models:
+
+Staff - Clinical staff registry (MD, RNs, technicians, lab techs, pharmacist, midwife, receptionist, cleaners, MCHAIDS, CHOs)
+Unit - Clinical units/departments (RECP, EMG, LAB, PHAR, PNC, ANT, MALE, FEMALE, CHILD_BRANCH, PHD)
+StaffShift - Shift roster for real-time capacity estimation
+Bed - Bed/mattress inventory per unit
+BedReservation - Bed assignments with status tracking (Reserved/Occupied/Released/Cancelled)
+Resource - Equipment inventory (oxygen cylinders, stretchers, etc.) per unit
+ResourceRequest - Equipment requests tied to visits with fulfillment tracking
+AdmissionWaitlist - Queue for patients waiting for bed availability
+IncidentReport - Operational incidents (bed shortages, equipment unavailable, patient left due to constraints)
+Extended Model:
+
+AttendanceLog - Add fields: destination_unit_id, is_outpatient, admission_reserved, priority_level
+Seed Data:
+
+10 units (RECP, EMG, LAB, PHAR, PNC, ANT, MALE, FEMALE, CHILD_BRANCH, PHD)
+Sample staff records (1 MD, 4 RNs, 3 technicians, 2 lab techs, 1 pharmacist, 1 midwife, 1 receptionist, 3 cleaners, 1 MCHAIDS, 2 CHOs)
+Bed inventory for wards (MALE, FEMALE, CHILD_BRANCH)
+Resource inventory (oxygen, stretchers) for EMG
+Backend API Layer (Express + Prisma)
+[MODIFY] 
+reception.controller.js
+Update existing endpoints:
+
+POST /reception/checkin - Extend to accept destination_unit_id, priority_level. Add logic:
+Check bed availability if destination is ward (MALE/FEMALE/CHILD_BRANCH)
+Create BedReservation or AdmissionWaitlist entry
+Handle ResourceRequest if equipment flagged
+Return admission_reserved, waitlist_id, bed_label in response
+New controller functions:
+
+getUnits - List all clinical units
+getStaffOnDuty - Get staff on duty for a unit/shift
+reserveBed - Atomic bed reservation with transaction
+getBedStatus - Current bed occupancy per unit
+requestResource - Create equipment request, decrement availability
+getResourceStatus - Resource inventory with critical flags
+notifyWaitlist - Mark waitlist entry as notified
+createIncident - Log operational incidents
+getOperationalAnalytics - Aggregate metrics (bed utilization, queue stats, staff ratios)
+[MODIFY] 
+reception.routes.js
+Add routes:
+
+GET /reception/units
+GET /reception/staff/on-duty
+POST /reception/bed/reserve
+GET /reception/bed/status
+POST /reception/resource/request
+GET /reception/resource/status
+POST /reception/waitlist/notify/:wait_id
+POST /reception/incident
+GET /reception/analytics/operational
+Frontend Layer (React Vite + Chakra UI)
+[MODIFY] 
+CheckInModal.jsx
+Transform check-in modal into unit-aware workflow:
+
+Unit Selector - Dropdown with units: Outpatient (default), Emergency, Antenatal, Post-natal, Ward Admission (Male/Female/Children), Laboratory, Pharmacy
+Priority Picker - High/Medium/Low (default: Medium, auto High if Emergency unit)
+Bed Availability Widget - Show available beds when ward selected, with "Add to Waitlist" option if none available
+Equipment Checkboxes - "Oxygen needed?", "Stretcher needed?" for Emergency
+Capacity Alerts - Show warning if unit understaffed or resources critical
+[NEW] 
+OperationalAlertsBanner.jsx
+Top-of-dashboard banner showing:
+
+"No available beds in Female Ward"
+"Oxygen critically low (0 available)"
+"Emergency unit understaffed (1 nurse on duty)"
+Uses WebSocket or polling on /reception/analytics/operational
+
+[NEW] 
+StaffStatusWidget.jsx
+Small card showing staff on duty per unit:
+
+Emergency: 1 MD, 2 RNs
+Laboratory: 2 Lab Techs
+Pharmacy: 1 Pharmacist
+Data from GET /reception/staff/on-duty
+
+[NEW] 
+WaitlistPanel.jsx
+Table showing admission waitlist with:
+
+Patient name, requested unit, priority, wait time
+"Notify Patient" button (calls POST /reception/waitlist/notify/:id)
+Auto-refresh when bed becomes available
+[NEW] 
+IncidentReportForm.jsx
+Quick form accessible from dashboard:
+
+Incident type: NoBed / NoEquipment / LeftDueToNoBed / EquipmentMalfunction / Other
+Unit selector
+Description textarea
+Submits to POST /reception/incident
+[MODIFY] 
+Dashboard.jsx
+Add new tabs/sections:
+
+Insert <OperationalAlertsBanner /> at top
+Add sidebar widget with <StaffStatusWidget />
+Add "Waitlist & Admissions" tab with <WaitlistPanel />
+Add "Report Incident" quick button opening <IncidentReportForm />
+[MODIFY] 
+QueueBoard.jsx
+Update to show:
+
+Unit badge per patient (Emergency, Lab, Pharmacy, etc.)
+Priority level badge (High/Medium/Low)
+Estimated wait time (calculated from staff on duty)
+Group queue by unit (collapsible sections)
+Data Seeding & Migrations
+[NEW] 
+seed.js
+Seed script to populate:
+
+10 units with codes and names
+20 staff records with roles
+15 beds (5 MALE, 6 FEMALE, 4 CHILD_BRANCH)
+4 resources (2 oxygen EMG, 1 stretcher EMG, 1 oxygen RECP)
+Sample staff shift for current day
+Verification Plan
+Automated Tests
+Currently, no automated test suite exists in the codebase. For this iteration, verification will be manual with potential for future test coverage.
+
+Manual Verification
+1. Database Schema Verification
+Steps:
+
+Run migration: cd server && npx prisma migrate dev --name add_unit_capacity_tracking
+Verify tables created: Open SQL Server Management Studio, connect to SQLEXPRESS02, expand database, verify presence of:
+Staff, Unit, StaffShift, Bed, BedReservation, Resource, ResourceRequest, AdmissionWaitlist, IncidentReport tables
+Updated AttendanceLog table with new columns
+Run seed: cd server && npx prisma db seed
+Verify seed data: Query SELECT * FROM Unit (expect 10 rows), SELECT * FROM Staff (expect ~20 rows), SELECT * FROM Bed (expect ~15 rows)
+Expected Result: All tables exist, seed data populated correctly.
+
+2. Unit-Aware Check-In Flow
+Scenario A: Outpatient Check-In (Default)
+
+Steps:
+
+Start server: cd server && npm start
+Start client: cd client && npm run dev
+Login as receptionist
+Search for existing patient (or register new one)
+Click "Check In"
+In check-in modal:
+Leave unit as "Outpatient" (default)
+Enter visit reason
+Click "Confirm Check-In"
+Verify response shows queue_number, is_outpatient: true, admission_reserved: false
+Navigate to Queue Board tab
+Verify patient appears in queue with "Outpatient" badge
+Expected Result: Patient checked in as outpatient, no bed operations triggered.
+
+Scenario B: Emergency Check-In with Equipment Request
+
+Steps:
+
+Register new patient or search existing
+Click "Check In"
+In modal:
+Select unit: "Emergency"
+Check "Oxygen needed?"
+Priority should auto-set to "High"
+Click "Confirm Check-In"
+Verify:
+Patient appears in queue board with "Emergency" badge, "High" priority
+Check database: SELECT * FROM ResourceRequest WHERE visit_id = <visit_id> - expect row with resource_id for oxygen, fulfilled = 1 if oxygen available
+If oxygen unavailable, expect IncidentReport row with incident_type = 'NoEquipment'
+Expected Result: Emergency patient prioritized, resource request created, incident logged if equipment unavailable.
+
+Scenario C: Ward Admission with Available Bed
+
+Steps:
+
+Check bed availability: Navigate to dashboard, verify bed count for "Female Ward" > 0 (or seed more beds)
+Check in patient:
+Select unit: "Ward Admission - Female"
+Click "Confirm Check-In"
+Verify response: admission_reserved: true, bed_label: "FEMALE-01" (or similar)
+Check database:
+SELECT * FROM BedReservation WHERE visit_id = <visit_id> - expect row with status = 'Reserved'
+SELECT * FROM Bed WHERE bed_id = <bed_id> - expect is_occupied = 1
+Verify dashboard shows reduced bed count for Female Ward
+Expected Result: Bed reserved atomically, availability decremented.
+
+Scenario D: Ward Admission with NO Available Beds (Waitlist)
+
+Steps:
+
+Occupy all Female Ward beds (either manually via SQL: UPDATE Bed SET is_occupied = 1 WHERE unit_id = <female_unit_id>, or check in multiple patients)
+Check in new patient:
+Select unit: "Ward Admission - Female"
+Notice banner: "No available beds in Female Ward"
+Modal shows "Add to Waitlist?" option
+Click "Add to Waitlist"
+Verify response: admission_reserved: false, waitlist_id: <id>
+Check database: SELECT * FROM AdmissionWaitlist WHERE visit_id = <visit_id> - expect row with status = 'Waiting', priority_level = 'High/Medium/Low'
+Navigate to "Waitlist & Admissions" tab
+Verify patient appears in waitlist table
+Release a bed (manually or via another patient discharge)
+Click "Notify Patient" button on waitlist entry
+Verify waitlist status updates to "Notified"
+Expected Result: Waitlist created when no beds available, notification workflow functional.
+
+3. Operational Alerts & Analytics
+Steps:
+
+Navigate to Dashboard
+Observe <OperationalAlertsBanner /> at top:
+If any bed utilization > 90%, expect alert: "Female Ward near capacity (5/6 beds occupied)"
+If resource available_quantity = 0, expect alert: "Oxygen critically low"
+Check Staff Status Widget:
+Should show counts like "Emergency: 1 MD, 2 RNs" (based on current shift data)
+Test analytics endpoint directly: GET http://localhost:3000/api/reception/analytics/operational (use Postman or browser)
+Verify JSON response includes:
+{
+  "bedUtilization": { "FEMALE": 0.83, "MALE": 0.6 },
+  "queueLength": { "EMG": 3, "LAB": 1 },
+  "staffToPatientRatio": { "EMG": 0.5 },
+  "criticalResources": ["Oxygen - Emergency"],
+  "incidents": { "NoBed": 2, "NoEquipment": 1 }
+}
+Expected Result: Real-time operational metrics surfaced correctly in UI and API.
+
+4. Incident Reporting
+Steps:
+
+Click "Report Incident" button on dashboard
+Fill form:
+Incident type: "NoBed"
+Unit: "Female Ward"
+Description: "Patient left due to no beds available for admission"
+Submit
+Verify success toast
+Check database: SELECT * FROM IncidentReport ORDER BY created_at DESC - expect new row with above details
+Navigate to analytics (future: incident dashboard tab) - verify incident count incremented
+Expected Result: Incident logged successfully, queryable for analytics.
+
+5. Queue Priority & Emergency Escalation
+Steps:
+
+Check in 3 patients:
+Patient A: Outpatient, priority Medium
+Patient B: Laboratory, priority Low
+Patient C: Emergency, priority High (auto)
+Navigate to Queue Board
+Verify sort order:
+Patient C (Emergency) appears FIRST
+Patient A (Medium) second
+Patient B (Low) third
+(Future enhancement: verify WebSocket push notification sent to MD/RN on duty for Patient C)
+Expected Result: Emergency patients auto-prioritized to top of queue.
+
+Edge Cases to Test
+ Check-in without unit selection (should default to Outpatient)
+ Resource request when resource already at zero (should create fulfilled = 0 request and incident)
+ Concurrent bed reservation (2 users try to reserve last bed simultaneously) - should use transaction to prevent double-booking
+ Waitlist notification when patient already notified (should be idempotent)
+ Staff shift data missing (wait time estimation should fall back to default)
+ View attendance records filtered by unit (verify new filter works)
+Post-Implementation Recommendations
+Operational Procedures
+Daily Bed Audit: Receptionist runs morning check to sync physical bed availability with system (Bed.is_occupied field)
+Shift Roster Entry: Administrator enters StaffShift records at start of each shift (or via future rostering UI)
+Resource Threshold Configuration: Set critical thresholds (e.g., alert when oxygen < 2 units) in Resource table metadata
+Weekly Incident Review: Clinical manager reviews IncidentReport table to identify procurement/staffing needs
+Future Enhancements (Not in Scope)
+WebSocket real-time notifications for emergency check-ins
+Rostering UI for staff shift management
+Bed discharge workflow (currently manual via BedReservation.status update)
+Resource procurement requests triggered from incident reports
+Historical analytics dashboard (trends over time)
+Unit-specific queue boards for distributed displays
+Acceptance Criteria Summary
+✅ Receptionist can check in patients to specific units (10 units supported)
+✅ System reserves bed OR creates waitlist entry for ward admissions
+✅ Emergency patients auto-escalate to High priority and top of queue
+✅ Equipment requests decrement inventory and log incidents if unavailable
+✅ Dashboard displays real-time bed availability and staff on duty
+✅ Operational analytics API returns bed utilization, queue metrics, staff ratios, incidents
+✅ All operations auditable (existing ReceptionAudit can be extended if needed)
+✅ Existing offline sync works with new fields (check-in payload extended)
