@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Heading, SimpleGrid, Stat, StatLabel, StatNumber, HStack, Icon
 } from '@chakra-ui/react';
@@ -14,8 +15,25 @@ const navItems = [
 ];
 
 export default function PharmacyDashboard() {
+  const { tab } = useParams();
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
-  const [activeTab, setActiveTab] = useState('queue');
+  
+  // Default to 'queue' if no tab specified
+  const activeTab = tab || 'queue';
+  
+  // Navigate to tab
+  const setActiveTab = (newTab) => {
+    navigate(`/pharmacy/${newTab}`);
+  };
+  
+  // Redirect to default if invalid tab
+  useEffect(() => {
+    const validTabs = ['queue', 'history'];
+    if (tab && !validTabs.includes(tab)) {
+      navigate('/pharmacy/queue', { replace: true });
+    }
+  }, [tab, navigate]);
 
   const fetchStats = async () => {
     try {

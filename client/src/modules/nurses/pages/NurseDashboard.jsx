@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Heading } from '@chakra-ui/react';
 import { FiUsers, FiActivity, FiCheckSquare, FiHome, FiClipboard } from 'react-icons/fi';
 import { FaUserNurse, FaBed, FaSignOutAlt } from 'react-icons/fa';
@@ -18,7 +19,24 @@ const navItems = [
 ];
 
 export default function NurseDashboard() {
-  const [activeTab, setActiveTab] = useState('queue');
+  const { tab } = useParams();
+  const navigate = useNavigate();
+  
+  // Default to 'queue' if no tab specified
+  const activeTab = tab || 'queue';
+  
+  // Navigate to tab
+  const setActiveTab = (newTab) => {
+    navigate(`/nurse/${newTab}`);
+  };
+  
+  // Redirect to default if invalid tab
+  useEffect(() => {
+    const validTabs = ['queue', 'admissions', 'ward', 'discharges', 'completed'];
+    if (tab && !validTabs.includes(tab)) {
+      navigate('/nurse/queue', { replace: true });
+    }
+  }, [tab, navigate]);
 
   const renderContent = () => {
     switch (activeTab) {

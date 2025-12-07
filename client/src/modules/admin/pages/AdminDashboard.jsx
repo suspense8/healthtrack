@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Button, Select, useToast,
   HStack, IconButton, AlertDialog, AlertDialogBody, AlertDialogFooter,
@@ -27,9 +28,26 @@ const navItems = [
 ];
 
 export default function AdminDashboard() {
+  const { tab } = useParams();
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
-  const [activeTab, setActiveTab] = useState('analytics');
   const [selectedUser, setSelectedUser] = useState(null);
+  
+  // Default to 'analytics' if no tab specified
+  const activeTab = tab || 'analytics';
+  
+  // Navigate to tab
+  const setActiveTab = (newTab) => {
+    navigate(`/admin/${newTab}`);
+  };
+  
+  // Redirect to default if invalid tab
+  useEffect(() => {
+    const validTabs = ['analytics', 'patient-flow', 'staff', 'logs', 'export', 'users', 'settings'];
+    if (tab && !validTabs.includes(tab)) {
+      navigate('/admin/analytics', { replace: true });
+    }
+  }, [tab, navigate]);
   
   // Delete Dialog State
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();

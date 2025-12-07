@@ -1,16 +1,79 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useToast } from '@chakra-ui/react';
+import { useNavigate } from 'react-router-dom';
 
 const NotificationContext = createContext(null);
 
 const SOCKET_URL = 'http://localhost:3000';
 
+// Request browser notification permission
+const requestNotificationPermission = async () => {
+  if (!('Notification' in window)) {
+    console.log('Browser does not support notifications');
+    return false;
+  }
+  
+  if (Notification.permission === 'granted') {
+    return true;
+  }
+  
+  if (Notification.permission !== 'denied') {
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+  }
+  
+  return false;
+};
+
 export const NotificationProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
   const toast = useToast();
+  const navigateRef = useRef(null);
+  const setTabRef = useRef(null);
+
+  // Request permission on mount
+  useEffect(() => {
+    requestNotificationPermission().then(setBrowserNotificationsEnabled);
+  }, []);
+
+  // Show browser notification
+  const showBrowserNotification = useCallback((notification) => {
+    if (!browserNotificationsEnabled) return;
+
+    try {
+      const browserNotif = new Notification(notification.title, {
+        body: notification.message,
+        icon: '/favicon.ico',
+        tag: notification.id,
+        requireInteraction: notification.title?.includes('🚨') || notification.title?.includes('EMERGENCY'),
+        data: notification
+      });
+
+      // Handle click - navigate to the relevant page
+      browserNotif.onclick = () => {
+        window.focus();
+        if (notification.navigateTo && navigateRef.current) {
+          navigateRef.current(notification.navigateTo);
+          // Set the tab if provided
+          if (notification.tab && setTabRef.current) {
+            setTimeout(() => setTabRef.current(notification.tab), 100);
+          }
+        }
+        browserNotif.close();
+      };
+
+      // Auto-close after 8 seconds for non-urgent
+      if (!notification.title?.includes('🚨')) {
+        setTimeout(() => browserNotif.close(), 8000);
+      }
+    } catch (err) {
+      console.error('Browser notification failed:', err);
+    }
+  }, [browserNotificationsEnabled]);
 
   // Connect with a specific role token
   const connect = useCallback((role) => {
@@ -49,9 +112,12 @@ export const NotificationProvider = ({ children }) => {
       console.log('📨 Received notification:', notification);
       
       // Add to notifications list
-      setNotifications(prev => [notification, ...prev].slice(0, 50)); // Keep last 50
+      setNotifications(prev => [notification, ...prev].slice(0, 50));
       
-      // Show toast notification
+      // Show browser notification (faster than toast)
+      showBrowserNotification(notification);
+      
+      // Also show toast notification as fallback
       const isUrgent = notification.title?.includes('🚨') || 
                        notification.title?.includes('EMERGENCY') ||
                        notification.title?.includes('URGENT');
@@ -70,7 +136,7 @@ export const NotificationProvider = ({ children }) => {
     });
 
     setSocket(newSocket);
-  }, [socket, toast]);
+  }, [socket, toast, showBrowserNotification]);
 
   // Disconnect
   const disconnect = useCallback(() => {
@@ -93,6 +159,27 @@ export const NotificationProvider = ({ children }) => {
     );
   }, []);
 
+  // Set navigation function (called from NotificationBell)
+  const setNavigateFunction = useCallback((navigateFn) => {
+    navigateRef.current = navigateFn;
+  }, []);
+
+  // Set tab change function (called from dashboard components)
+  const setTabFunction = useCallback((setTabFn) => {
+    setTabRef.current = setTabFn;
+  }, []);
+
+  // Navigate to notification destination
+  const navigateToNotification = useCallback((notification) => {
+    if (notification.navigateTo && navigateRef.current) {
+      navigateRef.current(notification.navigateTo);
+      if (notification.tab && setTabRef.current) {
+        setTimeout(() => setTabRef.current(notification.tab), 100);
+      }
+    }
+    markAsRead(notification.id);
+  }, [markAsRead]);
+
   // Get unread count
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -111,10 +198,14 @@ export const NotificationProvider = ({ children }) => {
       isConnected,
       notifications,
       unreadCount,
+      browserNotificationsEnabled,
       connect,
       disconnect,
       clearNotifications,
-      markAsRead
+      markAsRead,
+      setNavigateFunction,
+      setTabFunction,
+      navigateToNotification
     }}>
       {children}
     </NotificationContext.Provider>

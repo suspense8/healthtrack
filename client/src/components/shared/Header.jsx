@@ -7,6 +7,7 @@ import { FiUser, FiLogOut, FiSettings } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useOffline } from '../../context/OfflineContext';
+import NotificationBell from '../NotificationBell';
 
 export default function Header({ moduleTitle, moduleColor = 'blue' }) {
   const { user, logout } = useAuth();
@@ -28,6 +29,18 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
       case 'lab_tech': return 'orange';
       default: return 'gray';
     }
+  };
+
+  // Map module title to role for notifications
+  const getRoleFromModule = () => {
+    const titleLower = moduleTitle?.toLowerCase() || '';
+    if (titleLower.includes('nurse')) return 'nurse';
+    if (titleLower.includes('doctor')) return 'doctor';
+    if (titleLower.includes('pharm')) return 'pharmacy';
+    if (titleLower.includes('lab')) return 'lab';
+    if (titleLower.includes('admin')) return 'admin';
+    if (titleLower.includes('reception')) return 'receptionist';
+    return user?.role || 'nurse';
   };
 
   return (
@@ -60,7 +73,7 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
 
         <Spacer />
 
-        {/* Center/Right: Status Indicators */}
+        {/* Center/Right: Status Indicators & Notifications */}
         <HStack spacing={4} mr={6}>
           {!isOnline && <Badge colorScheme="red" fontSize="0.9em" px={2} py={1}>OFFLINE</Badge>}
           {pendingCount > 0 && (
@@ -75,6 +88,9 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
               {pendingCount} Pending Sync
             </Badge>
           )}
+          
+          {/* Notification Bell */}
+          <NotificationBell role={getRoleFromModule()} />
         </HStack>
 
         {/* Right: Profile Menu */}

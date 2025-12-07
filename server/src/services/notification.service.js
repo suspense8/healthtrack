@@ -2,6 +2,7 @@
  * Notification Service
  * 
  * Manages real-time push notifications between modules using Socket.IO
+ * Includes navigation URLs for clickable notifications
  */
 
 let io = null;
@@ -36,18 +37,15 @@ const NotificationType = {
   LAB_ORDER_CREATED: 'lab_order_created',
   PRESCRIPTION_CREATED: 'prescription_created',
   ADMISSION_REQUESTED: 'admission_requested',
-  ADMISSION_ACCEPTED: 'admission_accepted'
+  ADMISSION_ACCEPTED: 'admission_accepted',
+  PATIENT_ADMITTED: 'patient_admitted',
+  PATIENT_DISCHARGED: 'patient_discharged',
+  LAB_RESULTS_READY: 'lab_results_ready',
+  PRESCRIPTION_DISPENSED: 'prescription_dispensed'
 };
 
 /**
  * Send notification to a specific role room
- * 
- * @param {string} role - Target role (nurse, doctor, pharmacy, lab, admin)
- * @param {object} notification - Notification object
- * @param {string} notification.type - NotificationType
- * @param {string} notification.title - Short title
- * @param {string} notification.message - Detailed message
- * @param {object} notification.data - Additional data (patient info, ids, etc.)
  */
 function notify(role, notification) {
   if (!io) {
@@ -81,65 +79,131 @@ function broadcast(notification) {
   console.log(`📢 Broadcast notification:`, payload.title);
 }
 
-// ============== HELPER FUNCTIONS ==============
+// ============== WORKFLOW NOTIFICATIONS ==============
 
 /**
- * Notify nurses about new patient in queue
+ * Reception → Nurse: New patient in queue
  */
 function notifyPatientQueued(patient, queueNumber, isEmergency = false) {
   notify('nurse', {
     type: NotificationType.PATIENT_QUEUED,
-    title: isEmergency ? '🚨 EMERGENCY Patient Added' : 'New Patient in Queue',
+    title: isEmergency ? '🚨 EMERGENCY Patient' : 'New Patient in Queue',
     message: `${patient.first_name} ${patient.last_name} - Queue #${queueNumber}`,
-    data: { patient_id: patient.patient_id, queue_number: queueNumber, is_emergency: isEmergency }
+    data: { patient_id: patient.patient_id, queue_number: queueNumber, is_emergency: isEmergency },
+    navigateTo: '/nurse',
+    tab: 'queue'
   });
 }
 
 /**
- * Notify doctor that patient is ready for consultation
+ * Nurse → Doctor: Patient ready for consultation (vitals complete)
  */
 function notifyReadyForDoctor(patient, visitId) {
   notify('doctor', {
     type: NotificationType.READY_FOR_DOCTOR,
-    title: 'Patient Ready for Consultation',
+    title: '🩺 Patient Ready for Consultation',
     message: `${patient.first_name} ${patient.last_name} - Vitals complete`,
-    data: { patient_id: patient.patient_id, visit_id: visitId }
+    data: { patient_id: patient.patient_id, visit_id: visitId },
+    navigateTo: '/doctor',
+    tab: 'consultation'
   });
 }
 
 /**
- * Notify pharmacy about new prescription
+ * Doctor → Pharmacy: New prescription
  */
 function notifyPrescriptionCreated(patient, prescriptionCount) {
   notify('pharmacy', {
     type: NotificationType.PRESCRIPTION_CREATED,
-    title: 'New Prescription',
+    title: '💊 New Prescription',
     message: `${patient.first_name} ${patient.last_name} - ${prescriptionCount} medication(s)`,
-    data: { patient_id: patient.patient_id }
+    data: { patient_id: patient.patient_id },
+    navigateTo: '/pharmacy',
+    tab: 'queue'
   });
 }
 
 /**
- * Notify lab about new order
+ * Doctor → Lab: New lab order
  */
 function notifyLabOrderCreated(patient, testType, urgency) {
   notify('lab', {
     type: NotificationType.LAB_ORDER_CREATED,
-    title: urgency === 'Stat' ? '🚨 URGENT Lab Order' : 'New Lab Order',
+    title: urgency === 'Stat' ? '🚨 URGENT Lab Order' : '🔬 New Lab Order',
     message: `${patient.first_name} ${patient.last_name} - ${testType}`,
-    data: { patient_id: patient.patient_id, test_type: testType, urgency }
+    data: { patient_id: patient.patient_id, test_type: testType, urgency },
+    navigateTo: '/lab',
+    tab: 'queue'
   });
 }
 
 /**
- * Notify nurse about admission request
+ * Doctor → Nurse: Admission request
  */
 function notifyAdmissionRequested(patient, wardName) {
   notify('nurse', {
     type: NotificationType.ADMISSION_REQUESTED,
-    title: 'Admission Request',
+    title: '🏥 Admission Request',
     message: `${patient.first_name} ${patient.last_name} → ${wardName}`,
-    data: { patient_id: patient.patient_id }
+    data: { patient_id: patient.patient_id },
+    navigateTo: '/nurse',
+    tab: 'admissions'
+  });
+}
+
+/**
+ * Nurse → Doctor: Patient admitted
+ */
+function notifyPatientAdmitted(patient, wardName, bedNumber) {
+  notify('doctor', {
+    type: NotificationType.PATIENT_ADMITTED,
+    title: '✅ Patient Admitted',
+    message: `${patient.first_name} ${patient.last_name} → ${wardName} (Bed ${bedNumber})`,
+    data: { patient_id: patient.patient_id },
+    navigateTo: '/doctor',
+    tab: 'admitted'
+  });
+}
+
+/**
+ * Nurse → Doctor: Patient discharged
+ */
+function notifyPatientDischarged(patient) {
+  notify('doctor', {
+    type: NotificationType.PATIENT_DISCHARGED,
+    title: '👋 Patient Discharged',
+    message: `${patient.first_name} ${patient.last_name} has been discharged`,
+    data: { patient_id: patient.patient_id },
+    navigateTo: '/doctor',
+    tab: 'admitted'
+  });
+}
+
+/**
+ * Lab → Doctor: Lab results ready
+ */
+function notifyLabResultsReady(patient, testType) {
+  notify('doctor', {
+    type: NotificationType.LAB_RESULTS_READY,
+    title: '📋 Lab Results Ready',
+    message: `${patient.first_name} ${patient.last_name} - ${testType}`,
+    data: { patient_id: patient.patient_id },
+    navigateTo: '/doctor',
+    tab: 'patients'
+  });
+}
+
+/**
+ * Pharmacy → Doctor: Medication dispensed
+ */
+function notifyPrescriptionDispensed(patient) {
+  notify('doctor', {
+    type: NotificationType.PRESCRIPTION_DISPENSED,
+    title: '✅ Medication Dispensed',
+    message: `${patient.first_name} ${patient.last_name} - Prescription complete`,
+    data: { patient_id: patient.patient_id },
+    navigateTo: '/doctor',
+    tab: 'prescriptions'
   });
 }
 
@@ -149,10 +213,14 @@ module.exports = {
   notify,
   broadcast,
   NotificationType,
-  // Helper functions
+  // Workflow notifications
   notifyPatientQueued,
   notifyReadyForDoctor,
   notifyPrescriptionCreated,
   notifyLabOrderCreated,
-  notifyAdmissionRequested
+  notifyAdmissionRequested,
+  notifyPatientAdmitted,
+  notifyPatientDischarged,
+  notifyLabResultsReady,
+  notifyPrescriptionDispensed
 };
