@@ -24,7 +24,6 @@ const navItems = [
   { id: 'logs', label: 'Activity Logs', icon: FaHistory },
   { id: 'export', label: 'Data Export', icon: FaDatabase },
   { id: 'users', label: 'User Management', icon: FaUsers },
-  { id: 'settings', label: 'Settings', icon: FaCog },
 ];
 
 export default function AdminDashboard() {
@@ -43,7 +42,7 @@ export default function AdminDashboard() {
   
   // Redirect to default if invalid tab
   useEffect(() => {
-    const validTabs = ['analytics', 'patient-flow', 'staff', 'logs', 'export', 'users', 'settings'];
+    const validTabs = ['analytics', 'patient-flow', 'staff', 'logs', 'export', 'users'];
     if (tab && !validTabs.includes(tab)) {
       navigate('/admin/analytics', { replace: true });
     }

@@ -7,13 +7,72 @@ import {
 import { EditIcon, CheckIcon, CloseIcon, ViewIcon, ViewOffIcon } from '@chakra-ui/icons';
 import { FiUser, FiLock } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
+import ModuleLayout from '../components/shared/ModuleLayout';
 
 export default function Profile() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
+
+  // Determine module details
+  const getModuleInfo = () => {
+    const path = location.pathname;
+    if (path.startsWith('/reception')) return { title: 'Reception', color: 'blue' };
+    if (path.startsWith('/nurse')) return { title: 'Nurse Station', color: 'purple' };
+    if (path.startsWith('/doctor')) return { title: 'Doctor Portal', color: 'green' };
+    if (path.startsWith('/admin')) return { title: 'Admin Panel', color: 'red' };
+    if (path.startsWith('/pharmacy')) return { title: 'Pharmacy', color: 'teal' };
+    if (path.startsWith('/lab')) return { title: 'Laboratory', color: 'cyan' };
+    return { title: 'Profile', color: 'blue' };
+  };
+
+  const moduleInfo = getModuleInfo();
+
+  // Define navigation items based on module
+  const getNavItems = () => {
+    const path = location.pathname;
+    if (path.startsWith('/reception')) {
+      return [
+        { id: 'search', label: 'Search Patients' },
+        { id: 'register', label: 'Register Patient' },
+        { id: 'records', label: 'Attendance Records' }
+      ];
+    }
+    if (path.startsWith('/nurse')) {
+      return [
+        { id: 'queue', label: 'Patient Queue' },
+        { id: 'wards', label: 'Ward Management' }
+      ];
+    }
+    if (path.startsWith('/doctor')) {
+      return [
+        { id: 'consultation', label: 'Consultations' },
+        { id: 'admissions', label: 'Admissions' }
+      ];
+    }
+    if (path.startsWith('/admin')) {
+      return [
+        { id: 'analytics', label: 'Analytics Dashboard' },
+        { id: 'users', label: 'User Management' }
+      ];
+    }
+    if (path.startsWith('/pharmacy')) {
+      return [
+        { id: 'prescriptions', label: 'Prescriptions' },
+        { id: 'inventory', label: 'Inventory' }
+      ];
+    }
+    if (path.startsWith('/lab')) {
+      return [
+        { id: 'tests', label: 'Lab Tests' },
+        { id: 'results', label: 'Results' }
+      ];
+    }
+    return [];
+  };
 
   // Profile state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -145,7 +204,7 @@ export default function Profile() {
   };
 
   return (
-    <Box minH="100vh" bg="gray.50" pt={20} px={4}>
+    <ModuleLayout title={moduleInfo.title} color={moduleInfo.color} navItems={getNavItems()}>
       <Box maxW="container.md" mx="auto" pb={8}>
         <VStack spacing={6} align="stretch">
           {/* Profile Information Card */}
@@ -369,6 +428,6 @@ export default function Profile() {
           </Button>
         </VStack>
       </Box>
-    </Box>
+    </ModuleLayout>
   );
 }

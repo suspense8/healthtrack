@@ -3,6 +3,7 @@ import { Box, Spinner, Center } from '@chakra-ui/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
+import SettingsPage from './pages/SettingsPage';
 import ReceptionDashboard from './modules/reception/pages/ReceptionDashboard';
 import NurseDashboard from './modules/nurses/pages/NurseDashboard';
 import DoctorDashboard from './modules/doctor/pages/DoctorDashboard';
@@ -113,6 +114,56 @@ function AppRoutes() {
         element={
           <ProtectedRoute module="lab">
             <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Module-specific settings routes */}
+      <Route 
+        path="/reception/settings" 
+        element={
+          <ProtectedRoute module="reception">
+            <SettingsPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/nurse/settings" 
+        element={
+          <ProtectedRoute module="nurse">
+            <SettingsPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/doctor/settings" 
+        element={
+          <ProtectedRoute module="doctor">
+            <SettingsPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/settings" 
+        element={
+          <ProtectedRoute module="admin">
+            <SettingsPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/pharmacy/settings" 
+        element={
+          <ProtectedRoute module="pharmacy">
+            <SettingsPage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/lab/settings" 
+        element={
+          <ProtectedRoute module="lab">
+            <SettingsPage />
           </ProtectedRoute>
         } 
       />

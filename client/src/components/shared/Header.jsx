@@ -3,22 +3,17 @@ import {
   Avatar, HStack, Badge, Spacer, VStack, Icon
 } from '@chakra-ui/react';
 import { ChevronDownIcon } from '@chakra-ui/icons';
-import { FiUser, FiLogOut, FiSettings } from 'react-icons/fi';
+import { FiUser, FiSettings } from 'react-icons/fi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useOffline } from '../../context/OfflineContext';
 import NotificationBell from '../NotificationBell';
 
 export default function Header({ moduleTitle, moduleColor = 'blue' }) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { isOnline, pendingCount, triggerSync } = useOffline();
   const navigate = useNavigate();
   const location = useLocation();
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   const getRoleBadgeColor = (role) => {
     switch (role) {
@@ -60,6 +55,11 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
   const handleProfileClick = () => {
     const module = getCurrentModule();
     navigate(`/${module}/profile`);
+  };
+
+  const handleSettingsClick = () => {
+    const module = getCurrentModule();
+    navigate(`/${module}/settings`);
   };
 
   return (
@@ -145,17 +145,8 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
               <MenuItem icon={<Icon as={FiUser} />} onClick={handleProfileClick}>
                 My Profile
               </MenuItem>
-              <MenuItem icon={<Icon as={FiSettings} />} onClick={handleProfileClick}>
+              <MenuItem icon={<Icon as={FiSettings} />} onClick={handleSettingsClick}>
                 Account Settings
-              </MenuItem>
-              <MenuDivider />
-              <MenuItem 
-                icon={<Icon as={FiLogOut} />} 
-                onClick={handleLogout} 
-                color="red.500"
-                _hover={{ bg: 'red.50' }}
-              >
-                Sign Out
               </MenuItem>
             </Box>
           </MenuList>
