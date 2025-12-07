@@ -57,11 +57,8 @@ export const NotificationProvider = ({ children }) => {
       browserNotif.onclick = () => {
         window.focus();
         if (notification.navigateTo && navigateRef.current) {
+          // navigateTo now contains the full path including tab (e.g., /nurse/queue)
           navigateRef.current(notification.navigateTo);
-          // Set the tab if provided
-          if (notification.tab && setTabRef.current) {
-            setTimeout(() => setTabRef.current(notification.tab), 100);
-          }
         }
         browserNotif.close();
       };
@@ -172,10 +169,8 @@ export const NotificationProvider = ({ children }) => {
   // Navigate to notification destination
   const navigateToNotification = useCallback((notification) => {
     if (notification.navigateTo && navigateRef.current) {
+      // navigateTo now contains the full path including tab (e.g., /nurse/queue)
       navigateRef.current(notification.navigateTo);
-      if (notification.tab && setTabRef.current) {
-        setTimeout(() => setTabRef.current(notification.tab), 100);
-      }
     }
     markAsRead(notification.id);
   }, [markAsRead]);

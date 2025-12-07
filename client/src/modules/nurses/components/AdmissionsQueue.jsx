@@ -1,25 +1,16 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Heading, VStack, HStack, Text, Badge, Button, Spinner, Center,
-  Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, ModalFooter,
-  Select, Textarea, FormControl, FormLabel, useToast, useDisclosure,
-  Alert, AlertIcon, Divider, SimpleGrid
+  Alert, AlertIcon, Divider, SimpleGrid, useToast
 } from '@chakra-ui/react';
-import { CheckIcon, CloseIcon, WarningIcon } from '@chakra-ui/icons';
+import { CheckIcon, CloseIcon } from '@chakra-ui/icons';
 import api from '../../../services/api';
 
 export default function AdmissionsQueue() {
+  const navigate = useNavigate();
   const [admissions, setAdmissions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedAdmission, setSelectedAdmission] = useState(null);
-  const [beds, setBeds] = useState([]);
-  const [selectedBed, setSelectedBed] = useState('');
-  const [nurseNotes, setNurseNotes] = useState('');
-  const [rejectReason, setRejectReason] = useState('');
-  const [processing, setProcessing] = useState(false);
-  
-  const { isOpen: isAcceptOpen, onOpen: onAcceptOpen, onClose: onAcceptClose } = useDisclosure();
-  const { isOpen: isRejectOpen, onOpen: onRejectOpen, onClose: onRejectClose } = useDisclosure();
   const toast = useToast();
 
   const fetchAdmissions = async () => {
@@ -39,65 +30,6 @@ export default function AdmissionsQueue() {
     return () => clearInterval(interval);
   }, []);
 
-  const openAcceptModal = async (admission) => {
-    setSelectedAdmission(admission);
-    setSelectedBed('');
-    setNurseNotes('');
-    
-    // Fetch available beds for the ward
-    try {
-      const res = await api.get(`/admission/wards/${admission.ward_id}/beds`);
-      const available = res.data.filter(bed => bed.status === 'Available');
-      setBeds(available);
-    } catch (error) {
-      console.error('Failed to fetch beds', error);
-    }
-    onAcceptOpen();
-  };
-
-  const openRejectModal = (admission) => {
-    setSelectedAdmission(admission);
-    setRejectReason('');
-    onRejectOpen();
-  };
-
-  const handleAccept = async () => {
-    if (!selectedBed) {
-      toast({ title: 'Please select a bed', status: 'warning' });
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      await api.patch(`/admission/${selectedAdmission.admission_id}/accept`, {
-        bed_id: parseInt(selectedBed),
-        nurse_notes: nurseNotes
-      });
-      toast({ title: 'Patient admitted successfully', status: 'success' });
-      onAcceptClose();
-      fetchAdmissions();
-    } catch (error) {
-      toast({ title: 'Failed to admit patient', status: 'error' });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleReject = async () => {
-    setProcessing(true);
-    try {
-      await api.patch(`/admission/${selectedAdmission.admission_id}/reject`, {
-        reason: rejectReason || 'No bed available'
-      });
-      toast({ title: 'Admission rejected', status: 'warning' });
-      onRejectClose();
-      fetchAdmissions();
-    } catch (error) {
-      toast({ title: 'Failed to reject admission', status: 'error' });
-    } finally {
-      setProcessing(false);
-    }
-  };
 
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -207,14 +139,14 @@ export default function AdmissionsQueue() {
                 colorScheme="red" 
                 variant="outline"
                 leftIcon={<CloseIcon />}
-                onClick={() => openRejectModal(adm)}
+                onClick={() => navigate(`/nurse/admissions/reject/${adm.admission_id}`)}
               >
                 Reject
               </Button>
               <Button 
                 colorScheme="green" 
                 leftIcon={<CheckIcon />}
-                onClick={() => openAcceptModal(adm)}
+                onClick={() => navigate(`/nurse/admissions/accept/${adm.admission_id}`)}
               >
                 Accept & Assign Bed
               </Button>
@@ -222,98 +154,6 @@ export default function AdmissionsQueue() {
           </Box>
         ))}
       </VStack>
-
-      {/* Accept Modal */}
-      <Modal isOpen={isAcceptOpen} onClose={onAcceptClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Assign Bed to Patient</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={4} align="stretch">
-              {selectedAdmission && (
-                <Box p={3} bg="blue.50" borderRadius="md">
-                  <Text fontWeight="bold">
-                    {selectedAdmission.patient?.first_name} {selectedAdmission.patient?.last_name}
-                  </Text>
-                  <Text fontSize="sm">Ward: {selectedAdmission.ward?.ward_name}</Text>
-                </Box>
-              )}
-
-              <FormControl isRequired>
-                <FormLabel>Available Beds</FormLabel>
-                {beds.length === 0 ? (
-                  <Alert status="error" borderRadius="md">
-                    <AlertIcon />
-                    No beds available in this ward
-                  </Alert>
-                ) : (
-                  <Select 
-                    placeholder="Select a bed" 
-                    value={selectedBed}
-                    onChange={(e) => setSelectedBed(e.target.value)}
-                  >
-                    {beds.map(bed => (
-                      <option key={bed.bed_id} value={bed.bed_id}>
-                        Bed {bed.bed_number}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </FormControl>
-
-              <FormControl>
-                <FormLabel>Initial Nurse Notes</FormLabel>
-                <Textarea 
-                  value={nurseNotes}
-                  onChange={(e) => setNurseNotes(e.target.value)}
-                  placeholder="Initial observations, patient condition on arrival..."
-                />
-              </FormControl>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button mr={3} onClick={onAcceptClose}>Cancel</Button>
-            <Button 
-              colorScheme="green" 
-              onClick={handleAccept}
-              isLoading={processing}
-              isDisabled={beds.length === 0}
-            >
-              Confirm Admission
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Reject Modal */}
-      <Modal isOpen={isRejectOpen} onClose={onRejectClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Reject Admission Request</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <FormControl>
-              <FormLabel>Reason for Rejection</FormLabel>
-              <Textarea 
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="e.g., No beds available, patient needs higher level of care..."
-              />
-            </FormControl>
-          </ModalBody>
-          <ModalFooter>
-            <Button mr={3} onClick={onRejectClose}>Cancel</Button>
-            <Button 
-              colorScheme="red" 
-              onClick={handleReject}
-              isLoading={processing}
-            >
-              Confirm Rejection
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
     </Box>
   );
 }

@@ -186,8 +186,204 @@ async function getDiseaseById(id) {
   return result[0] || null;
 }
 
+/**
+ * Search medicines by name, generic name, or description using hybrid search
+ * 
+ * Strategy:
+ * 1. First, find medicines with matching names (exact or partial)
+ * 2. Then, do vector similarity search for description-based matching
+ * 3. Combine results, prioritizing name matches
+ * 
+ * @param {string} query - Medicine name, generic name, or description
+ * @param {object} options - Search options
+ * @param {number} options.limit - Max results to return (default 10)
+ * @param {number} options.minSimilarity - Minimum similarity threshold (default 0.3)
+ * @returns {Promise<Array>} Array of matching medicines with similarity scores
+ */
+async function searchMedicines(query, options = {}) {
+  const { limit = 10, minSimilarity = 0.3 } = options;
+  
+  if (!query?.trim()) {
+    return [];
+  }
+
+  const searchQuery = query.trim();
+
+  try {
+    // Step 1: Search by name (exact or partial match) - PRIORITIZED
+    const nameMatches = await prisma.$queryRaw`
+      SELECT 
+        id,
+        name,
+        generic_name,
+        ndc_code,
+        manufacturer,
+        title,
+        ingredients,
+        description,
+        CASE 
+          WHEN LOWER(name) = LOWER(${searchQuery}) THEN 1.0
+          WHEN LOWER(name) LIKE LOWER(${searchQuery + '%'}) THEN 0.95
+          WHEN LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 0.90
+          WHEN LOWER(generic_name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 0.85
+          ELSE 0.80
+        END as similarity
+      FROM medicines
+      WHERE 
+        LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'})
+        OR LOWER(generic_name) LIKE LOWER(${'%' + searchQuery + '%'})
+        OR LOWER(ndc_code) LIKE LOWER(${'%' + searchQuery + '%'})
+      ORDER BY 
+        CASE 
+          WHEN LOWER(name) = LOWER(${searchQuery}) THEN 1
+          WHEN LOWER(name) LIKE LOWER(${searchQuery + '%'}) THEN 2
+          WHEN LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 3
+          WHEN LOWER(generic_name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 4
+          ELSE 5
+        END,
+        name ASC
+      LIMIT ${Math.ceil(limit / 3)}
+    `;
+
+    // Step 2: Fuzzy search for misspelled names using pg_trgm
+    const fuzzyMatches = await prisma.$queryRaw`
+      SELECT 
+        id,
+        name,
+        generic_name,
+        ndc_code,
+        manufacturer,
+        title,
+        ingredients,
+        description,
+        GREATEST(
+          similarity(LOWER(name), LOWER(${searchQuery})),
+          similarity(LOWER(COALESCE(generic_name, '')), LOWER(${searchQuery}))
+        ) as similarity
+      FROM medicines
+      WHERE 
+        similarity(LOWER(name), LOWER(${searchQuery})) > 0.25
+        OR similarity(LOWER(COALESCE(generic_name, '')), LOWER(${searchQuery})) > 0.25
+      ORDER BY similarity DESC
+      LIMIT ${Math.ceil(limit / 3)}
+    `;
+
+    // Step 3: Vector similarity search for description-based matching
+    const queryEmbedding = await generateQueryEmbedding(searchQuery);
+    const embeddingStr = `[${queryEmbedding.join(',')}]`;
+    
+    const vectorMatches = await prisma.$queryRaw`
+      SELECT 
+        id,
+        name,
+        generic_name,
+        ndc_code,
+        manufacturer,
+        title,
+        ingredients,
+        description,
+        1 - (embedding <=> ${embeddingStr}::vector) as similarity
+      FROM medicines
+      WHERE embedding IS NOT NULL
+      ORDER BY embedding <=> ${embeddingStr}::vector
+      LIMIT ${limit}
+    `;
+
+    // Step 4: Combine results, prioritizing exact > fuzzy > vector
+    const seenIds = new Set();
+    const combinedResults = [];
+
+    // Add exact name matches first (highest priority)
+    for (const match of nameMatches) {
+      seenIds.add(match.id);
+      combinedResults.push({
+        id: match.id,
+        name: match.name,
+        genericName: match.generic_name,
+        ndcCode: match.ndc_code,
+        manufacturer: match.manufacturer,
+        title: match.title,
+        ingredients: match.ingredients,
+        description: match.description,
+        similarity: Number(match.similarity),
+        matchPercentage: Math.round(Number(match.similarity) * 100),
+        matchType: 'name'
+      });
+    }
+
+    // Add fuzzy matches (for misspellings)
+    for (const match of fuzzyMatches) {
+      if (!seenIds.has(match.id)) {
+        seenIds.add(match.id);
+        combinedResults.push({
+          id: match.id,
+          name: match.name,
+          genericName: match.generic_name,
+          ndcCode: match.ndc_code,
+          manufacturer: match.manufacturer,
+          title: match.title,
+          ingredients: match.ingredients,
+          description: match.description,
+          similarity: Math.round(Number(match.similarity) * 100) / 100,
+          matchPercentage: Math.round(Number(match.similarity) * 100),
+          matchType: 'fuzzy'
+        });
+      }
+    }
+
+    // Add vector matches that aren't already included
+    for (const match of vectorMatches) {
+      if (!seenIds.has(match.id) && match.similarity >= minSimilarity) {
+        seenIds.add(match.id);
+        combinedResults.push({
+          id: match.id,
+          name: match.name,
+          genericName: match.generic_name,
+          ndcCode: match.ndc_code,
+          manufacturer: match.manufacturer,
+          title: match.title,
+          ingredients: match.ingredients,
+          description: match.description,
+          similarity: Math.round(Number(match.similarity) * 100) / 100,
+          matchPercentage: Math.round(Number(match.similarity) * 100),
+          matchType: 'description'
+        });
+      }
+    }
+
+    // Return up to limit results
+    return combinedResults.slice(0, limit);
+      
+  } catch (error) {
+    console.error('Medicine hybrid search error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get medicine by ID
+ */
+async function getMedicineById(id) {
+  const result = await prisma.$queryRaw`
+    SELECT 
+      id, 
+      name, 
+      generic_name,
+      ndc_code,
+      manufacturer,
+      title,
+      ingredients,
+      description
+    FROM medicines
+    WHERE id = ${parseInt(id)}
+  `;
+  return result[0] || null;
+}
+
 module.exports = {
   searchDiseases,
   getDiseaseById,
+  searchMedicines,
+  getMedicineById,
   generateQueryEmbedding
 };

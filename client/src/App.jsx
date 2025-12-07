@@ -7,6 +7,21 @@ import NurseDashboard from './modules/nurses/pages/NurseDashboard';
 import DoctorDashboard from './modules/doctor/pages/DoctorDashboard';
 import AdminDashboard from './modules/admin/pages/AdminDashboard';
 import PharmacyDashboard from './modules/pharmacy/pages/PharmacyDashboard';
+// Subscreens
+import CheckInView from './modules/reception/components/CheckInView';
+import PatientDetailView from './modules/nurses/components/PatientDetailView';
+import VitalsView from './modules/nurses/components/VitalsView';
+import PatientHistoryView from './modules/doctor/components/PatientHistoryView';
+import ConsultationView from './modules/doctor/components/ConsultationView';
+import PatientVerificationView from './modules/reception/components/PatientVerificationView';
+import WardPatientView from './modules/nurses/components/WardPatientView';
+import AdmissionDetailView from './modules/doctor/components/AdmissionDetailView';
+import DischargeView from './modules/doctor/components/DischargeView';
+import AcceptAdmissionView from './modules/nurses/components/AcceptAdmissionView';
+import RejectAdmissionView from './modules/nurses/components/RejectAdmissionView';
+import ConfirmDischargeView from './modules/nurses/components/ConfirmDischargeView';
+import AddNoteView from './modules/nurses/components/AddNoteView';
+import NursePatientHistoryView from './modules/nurses/components/PatientHistoryView';
 
 // Map module names to their expected roles
 const moduleRoles = {
@@ -51,9 +66,17 @@ function AppRoutes() {
       {/* Default login redirects to reception */}
       <Route path="/login" element={<Navigate to="/reception/login" replace />} />
       
-      {/* Protected module routes */}
+      {/* Protected module routes with nested tab routes */}
       <Route
         path="/reception"
+        element={
+          <ProtectedRoute module="reception">
+            <Navigate to="/reception/search" replace />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reception/:tab"
         element={
           <ProtectedRoute module="reception">
             <ReceptionDashboard />
@@ -64,12 +87,137 @@ function AppRoutes() {
         path="/nurse"
         element={
           <ProtectedRoute module="nurse">
+            <Navigate to="/nurse/queue" replace />
+          </ProtectedRoute>
+        }
+      />
+      {/* Nurse Subscreens - Must come before /nurse/:tab to avoid route conflicts */}
+      <Route
+        path="/nurse/patient/:patientId/history"
+        element={
+          <ProtectedRoute module="nurse">
+            <NursePatientHistoryView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/patient/:visitId"
+        element={
+          <ProtectedRoute module="nurse">
+            <PatientDetailView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/vitals/:visitId"
+        element={
+          <ProtectedRoute module="nurse">
+            <VitalsView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/ward/patient/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <WardPatientView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/admissions/accept/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <AcceptAdmissionView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/admissions/reject/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <RejectAdmissionView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/discharge/confirm/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <ConfirmDischargeView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/ward/note/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <AddNoteView />
+          </ProtectedRoute>
+        }
+      />
+      
+      <Route
+        path="/nurse/:tab"
+        element={
+          <ProtectedRoute module="nurse">
             <NurseDashboard />
           </ProtectedRoute>
         }
       />
       <Route
         path="/doctor"
+        element={
+          <ProtectedRoute module="doctor">
+            <Navigate to="/doctor/dashboard" replace />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Doctor Subscreens - Must come before /doctor/:tab to avoid route conflicts */}
+      <Route
+        path="/doctor/consultation/:visitId"
+        element={
+          <ProtectedRoute module="doctor">
+            <ConsultationView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/doctor/consultation/:visitId/history"
+        element={
+          <ProtectedRoute module="doctor">
+            <PatientHistoryView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/doctor/patient/:patientId/history"
+        element={
+          <ProtectedRoute module="doctor">
+            <PatientHistoryView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/doctor/admission/:admissionId"
+        element={
+          <ProtectedRoute module="doctor">
+            <AdmissionDetailView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/doctor/discharge/:admissionId"
+        element={
+          <ProtectedRoute module="doctor">
+            <DischargeView />
+          </ProtectedRoute>
+        }
+      />
+      
+      <Route
+        path="/doctor/:tab"
         element={
           <ProtectedRoute module="doctor">
             <DoctorDashboard />
@@ -80,6 +228,14 @@ function AppRoutes() {
         path="/admin"
         element={
           <ProtectedRoute module="admin">
+            <Navigate to="/admin/analytics" replace />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/:tab"
+        element={
+          <ProtectedRoute module="admin">
             <AdminDashboard />
           </ProtectedRoute>
         }
@@ -88,7 +244,91 @@ function AppRoutes() {
         path="/pharmacy"
         element={
           <ProtectedRoute module="pharmacy">
+            <Navigate to="/pharmacy/queue" replace />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pharmacy/:tab"
+        element={
+          <ProtectedRoute module="pharmacy">
             <PharmacyDashboard />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Reception Subscreens */}
+      <Route
+        path="/reception/checkin/:patientId"
+        element={
+          <ProtectedRoute module="reception">
+            <CheckInView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reception/verify/:patientId"
+        element={
+          <ProtectedRoute module="reception">
+            <PatientVerificationView />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Nurse Subscreens */}
+      <Route
+        path="/nurse/patient/:visitId"
+        element={
+          <ProtectedRoute module="nurse">
+            <PatientDetailView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/vitals/:visitId"
+        element={
+          <ProtectedRoute module="nurse">
+            <VitalsView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/ward/patient/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <WardPatientView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/admissions/accept/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <AcceptAdmissionView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/admissions/reject/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <RejectAdmissionView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/discharge/confirm/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <ConfirmDischargeView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/ward/note/:admissionId"
+        element={
+          <ProtectedRoute module="nurse">
+            <AddNoteView />
           </ProtectedRoute>
         }
       />

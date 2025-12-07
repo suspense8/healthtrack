@@ -7,7 +7,7 @@ const notificationService = require('../../services/notification.service');
 const extractPatientData = (data) => {
   const {
     first_name, last_name, middle_name,
-    date_of_birth, estimated_age,
+    date_of_birth, estimated_age, age,
     gender, national_id, patient_type,
     phone_number, email, address,
     emergency_contact_name, emergency_contact_phone,
@@ -20,20 +20,46 @@ const extractPatientData = (data) => {
   if (finalDob === "") finalDob = null;
 
   if (!finalDob && estimated_age) {
-    const age = parseInt(estimated_age);
-    if (!isNaN(age)) {
+    const ageNum = parseInt(estimated_age);
+    if (!isNaN(ageNum)) {
       const today = new Date();
-      finalDob = new Date(today.getFullYear() - age, 0, 1);
+      finalDob = new Date(today.getFullYear() - ageNum, 0, 1);
     }
   }
 
+  // Calculate age from DOB if not provided
+  let calculatedAge = age;
+  if (!calculatedAge && finalDob) {
+    const birthDate = new Date(finalDob);
+    const today = new Date();
+    calculatedAge = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      calculatedAge--;
+    }
+    if (calculatedAge < 0 || calculatedAge > 120) calculatedAge = null;
+  }
+
   return {
-    first_name, last_name, middle_name,
+    // Store all names in lowercase
+    first_name: first_name ? first_name.toLowerCase().trim() : first_name,
+    last_name: last_name ? last_name.toLowerCase().trim() : last_name,
+    middle_name: middle_name ? middle_name.toLowerCase().trim() : middle_name,
     date_of_birth: finalDob,
+    age: calculatedAge,
     gender, national_id, patient_type,
-    phone_number, email, address,
-    emergency_contact_name, emergency_contact_phone,
-    allergies, existing_conditions,
+    // Store phone numbers as digits only (remove formatting)
+    phone_number: phone_number ? phone_number.replace(/\D/g, '') : phone_number,
+    // Store email in lowercase
+    email: email ? email.toLowerCase().trim() : email,
+    // Store address in lowercase
+    address: address ? address.toLowerCase().trim() : address,
+    // Store emergency contact name in lowercase
+    emergency_contact_name: emergency_contact_name ? emergency_contact_name.toLowerCase().trim() : emergency_contact_name,
+    emergency_contact_phone: emergency_contact_phone ? emergency_contact_phone.replace(/\D/g, '') : emergency_contact_phone,
+    // Store medical context in lowercase
+    allergies: allergies ? allergies.toLowerCase().trim() : allergies,
+    existing_conditions: existing_conditions ? existing_conditions.toLowerCase().trim() : existing_conditions,
     first_visit, partial_profile, is_temp_record,
     id_verification_status
   };
@@ -86,20 +112,24 @@ const searchPatients = async (req, res) => {
         take: 20,
       });
     } else if (searchType === 'phone' && query) {
-      // Exact match on phone_number
+      // Strip non-digits from phone query to match stored format
+      const normalizedPhone = query.replace(/\D/g, '');
       patients = await prisma.patient.findMany({
-        where: { phone_number: query },
+        where: { phone_number: normalizedPhone },
         take: 20,
       });
     } else if (query) {
+      // Normalize query to lowercase to match database storage
+      const normalizedQuery = query.toLowerCase().trim();
+      
       // Fuzzy search on name, id, phone
       patients = await prisma.patient.findMany({
         where: {
           OR: [
-            { first_name: { contains: query } },
-            { last_name: { contains: query } },
-            { national_id: { contains: query } },
-            { phone_number: { contains: query } },
+            { first_name: { contains: normalizedQuery } },
+            { last_name: { contains: normalizedQuery } },
+            { national_id: { contains: query } }, // Keep original case for ID
+            { phone_number: { contains: query.replace(/\D/g, '') } }, // Strip formatting
           ],
         },
         take: 20,
@@ -140,9 +170,36 @@ const updatePatient = async (req, res) => {
       where: { patient_id: parseInt(id) }
     });
     
+    // Transform data to lowercase for names, email, address, etc.
+    const updateData = { ...req.body };
+    if (updateData.first_name) updateData.first_name = updateData.first_name.toLowerCase().trim();
+    if (updateData.last_name) updateData.last_name = updateData.last_name.toLowerCase().trim();
+    if (updateData.middle_name) updateData.middle_name = updateData.middle_name.toLowerCase().trim();
+    if (updateData.email) updateData.email = updateData.email.toLowerCase().trim();
+    if (updateData.address) updateData.address = updateData.address.toLowerCase().trim();
+    if (updateData.allergies) updateData.allergies = updateData.allergies.toLowerCase().trim();
+    if (updateData.existing_conditions) updateData.existing_conditions = updateData.existing_conditions.toLowerCase().trim();
+    if (updateData.emergency_contact_name) updateData.emergency_contact_name = updateData.emergency_contact_name.toLowerCase().trim();
+    if (updateData.phone_number) updateData.phone_number = updateData.phone_number.replace(/\D/g, '');
+    if (updateData.emergency_contact_phone) updateData.emergency_contact_phone = updateData.emergency_contact_phone.replace(/\D/g, '');
+    
+    // Calculate age from DOB if DOB is being updated
+    if (updateData.date_of_birth && !updateData.age) {
+      const birthDate = new Date(updateData.date_of_birth);
+      const today = new Date();
+      let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        calculatedAge--;
+      }
+      if (calculatedAge >= 0 && calculatedAge <= 120) {
+        updateData.age = calculatedAge;
+      }
+    }
+    
     const patient = await prisma.patient.update({
       where: { patient_id: parseInt(id) },
-      data: req.body,
+      data: updateData,
     });
     
     // Log the action

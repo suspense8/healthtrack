@@ -90,8 +90,7 @@ function notifyPatientQueued(patient, queueNumber, isEmergency = false) {
     title: isEmergency ? '🚨 EMERGENCY Patient' : 'New Patient in Queue',
     message: `${patient.first_name} ${patient.last_name} - Queue #${queueNumber}`,
     data: { patient_id: patient.patient_id, queue_number: queueNumber, is_emergency: isEmergency },
-    navigateTo: '/nurse',
-    tab: 'queue'
+    navigateTo: '/nurse/queue'
   });
 }
 
@@ -104,8 +103,7 @@ function notifyReadyForDoctor(patient, visitId) {
     title: '🩺 Patient Ready for Consultation',
     message: `${patient.first_name} ${patient.last_name} - Vitals complete`,
     data: { patient_id: patient.patient_id, visit_id: visitId },
-    navigateTo: '/doctor',
-    tab: 'consultation'
+    navigateTo: '/doctor/consultation'
   });
 }
 
@@ -113,13 +111,12 @@ function notifyReadyForDoctor(patient, visitId) {
  * Doctor → Pharmacy: New prescription
  */
 function notifyPrescriptionCreated(patient, prescriptionCount) {
-  notify('pharmacy', {
+  notify('pharmacist', {
     type: NotificationType.PRESCRIPTION_CREATED,
     title: '💊 New Prescription',
     message: `${patient.first_name} ${patient.last_name} - ${prescriptionCount} medication(s)`,
     data: { patient_id: patient.patient_id },
-    navigateTo: '/pharmacy',
-    tab: 'queue'
+    navigateTo: '/pharmacy/queue'
   });
 }
 
@@ -127,13 +124,12 @@ function notifyPrescriptionCreated(patient, prescriptionCount) {
  * Doctor → Lab: New lab order
  */
 function notifyLabOrderCreated(patient, testType, urgency) {
-  notify('lab', {
+  notify('lab_tech', {
     type: NotificationType.LAB_ORDER_CREATED,
     title: urgency === 'Stat' ? '🚨 URGENT Lab Order' : '🔬 New Lab Order',
     message: `${patient.first_name} ${patient.last_name} - ${testType}`,
     data: { patient_id: patient.patient_id, test_type: testType, urgency },
-    navigateTo: '/lab',
-    tab: 'queue'
+    navigateTo: '/lab/queue'
   });
 }
 
@@ -146,8 +142,7 @@ function notifyAdmissionRequested(patient, wardName) {
     title: '🏥 Admission Request',
     message: `${patient.first_name} ${patient.last_name} → ${wardName}`,
     data: { patient_id: patient.patient_id },
-    navigateTo: '/nurse',
-    tab: 'admissions'
+    navigateTo: '/nurse/admissions'
   });
 }
 
@@ -160,8 +155,7 @@ function notifyPatientAdmitted(patient, wardName, bedNumber) {
     title: '✅ Patient Admitted',
     message: `${patient.first_name} ${patient.last_name} → ${wardName} (Bed ${bedNumber})`,
     data: { patient_id: patient.patient_id },
-    navigateTo: '/doctor',
-    tab: 'admitted'
+    navigateTo: '/doctor/admitted'
   });
 }
 
@@ -174,8 +168,7 @@ function notifyPatientDischarged(patient) {
     title: '👋 Patient Discharged',
     message: `${patient.first_name} ${patient.last_name} has been discharged`,
     data: { patient_id: patient.patient_id },
-    navigateTo: '/doctor',
-    tab: 'admitted'
+    navigateTo: '/doctor/admitted'
   });
 }
 
@@ -188,8 +181,7 @@ function notifyLabResultsReady(patient, testType) {
     title: '📋 Lab Results Ready',
     message: `${patient.first_name} ${patient.last_name} - ${testType}`,
     data: { patient_id: patient.patient_id },
-    navigateTo: '/doctor',
-    tab: 'patients'
+    navigateTo: '/doctor/patients'
   });
 }
 
@@ -202,8 +194,7 @@ function notifyPrescriptionDispensed(patient) {
     title: '✅ Medication Dispensed',
     message: `${patient.first_name} ${patient.last_name} - Prescription complete`,
     data: { patient_id: patient.patient_id },
-    navigateTo: '/doctor',
-    tab: 'prescriptions'
+    navigateTo: '/doctor/prescriptions'
   });
 }
 

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Heading, useDisclosure } from '@chakra-ui/react';
 import { FiSearch, FiCalendar, FiUserPlus, FiList, FiClipboard } from 'react-icons/fi';
 import { FaClipboardList } from 'react-icons/fa';
@@ -7,7 +8,6 @@ import PatientSearch from '../components/PatientSearch';
 import RegisterPatient from '../components/RegisterPatient';
 import QueueBoard from '../components/QueueBoard';
 import AttendanceRecords from '../components/AttendanceRecords';
-import CheckInModal from '../components/CheckInModal';
 import ReceptionAppointments from '../components/ReceptionAppointments';
 
 const navItems = [
@@ -19,22 +19,31 @@ const navItems = [
 ];
 
 export default function ReceptionDashboard() {
-  const [activeTab, setActiveTab] = useState('search');
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const { isOpen: isCheckInOpen, onOpen: onCheckInOpen, onClose: onCheckInClose } = useDisclosure();
+  const { tab } = useParams();
+  const navigate = useNavigate();
+  
+  // Default to 'search' if no tab specified
+  const activeTab = tab || 'search';
+  
+  // Navigate to tab
+  const setActiveTab = (newTab) => {
+    navigate(`/reception/${newTab}`);
+  };
+  
+  // Redirect to default if invalid tab
+  useEffect(() => {
+    const validTabs = ['search', 'appointments', 'register', 'queue', 'attendance'];
+    if (tab && !validTabs.includes(tab)) {
+      navigate('/reception/search', { replace: true });
+    }
+  }, [tab, navigate]);
 
   const handlePatientRegistered = (patient, isEmergency = false) => {
     if (isEmergency) {
       setActiveTab('queue');
     } else {
-      setSelectedPatient(patient);
-      onCheckInOpen();
+      navigate(`/reception/checkin/${patient.patient_id}`);
     }
-  };
-
-  const handleCheckInComplete = () => {
-    setActiveTab('queue');
-    onCheckInClose();
   };
 
   const renderContent = () => {
@@ -70,14 +79,6 @@ export default function ReceptionDashboard() {
       <Box bg="white" p={6} borderRadius="lg" boxShadow="sm">
         {renderContent()}
       </Box>
-
-      {selectedPatient && (
-        <CheckInModal 
-          isOpen={isCheckInOpen} 
-          onClose={handleCheckInComplete} 
-          patient={selectedPatient} 
-        />
-      )}
     </ModuleLayout>
   );
 }

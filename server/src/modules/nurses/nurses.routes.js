@@ -9,7 +9,13 @@ router.use(authenticateJWT);
 router.use(authorizeRoles('admin', 'nurse'));
 
 router.get('/queue', nursesController.getQueue);
+router.get('/visits/:visitId', nursesController.getVisit);
 router.post('/vitals', nursesController.updateVitals);
+
+// Patient management
+router.get('/patients/search', nursesController.searchPatients);
+router.get('/patients/:patientId/history', nursesController.getPatientHistory);
+router.get('/patients/:patientId', nursesController.getPatient);
 
 // Ward management
 router.get('/wards', nursesController.getWards);

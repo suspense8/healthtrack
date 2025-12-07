@@ -1,17 +1,17 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Heading, Input, InputGroup, InputLeftElement, Table, Thead, Tbody, Tr, Th, Td, Button,
   VStack, Text, useToast, HStack
 } from '@chakra-ui/react';
 import { SearchIcon } from '@chakra-ui/icons';
 import api from '../../../services/api';
-import PatientHistoryView from './PatientHistoryView';
 
 export default function PatientManagement() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState(null);
   const toast = useToast();
 
   const handleSearch = async () => {
@@ -34,14 +34,6 @@ export default function PatientManagement() {
     }
   };
 
-  if (selectedPatient) {
-    return (
-      <PatientHistoryView 
-        patient={selectedPatient} 
-        onBack={() => setSelectedPatient(null)} 
-      />
-    );
-  }
 
   return (
     <Box bg="white" p={6} borderRadius="lg" boxShadow="sm">
@@ -84,7 +76,7 @@ export default function PatientManagement() {
                 <Td>{patient.phone_number}</Td>
                 <Td>{patient.date_of_birth ? new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear() : 'N/A'}</Td>
                 <Td>
-                  <Button size="sm" variant="outline" onClick={() => setSelectedPatient(patient)}>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/doctor/patient/${patient.patient_id}/history`)}>
                     View History
                   </Button>
                 </Td>

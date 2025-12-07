@@ -211,16 +211,40 @@ export default function PharmacyQueue({ onDispenseComplete }) {
                   <Th>Dosage</Th>
                   <Th>Frequency</Th>
                   <Th>Duration</Th>
+                  <Th>Stock Status</Th>
                   <Th>Actions</Th>
                 </Tr>
               </Thead>
               <Tbody>
-                {group.prescriptions.map((rx) => (
+                {group.prescriptions.map((rx) => {
+                  const stockStatus = rx.stockStatus;
+                  const isOutOfStock = stockStatus?.isOutOfStock;
+                  const isLowStock = stockStatus?.isLowStock;
+                  
+                  return (
                   <Tr key={rx.prescription_id}>
                     <Td fontWeight="bold">{rx.medication_name}</Td>
                     <Td>{rx.dosage}</Td>
                     <Td>{rx.frequency}</Td>
                     <Td>{rx.duration}</Td>
+                      <Td>
+                        {stockStatus ? (
+                          <VStack align="start" spacing={1}>
+                            {isOutOfStock ? (
+                              <Badge colorScheme="red" fontSize="xs">Out of Stock</Badge>
+                            ) : isLowStock ? (
+                              <Badge colorScheme="orange" fontSize="xs">Low Stock</Badge>
+                            ) : (
+                              <Badge colorScheme="green" fontSize="xs">In Stock</Badge>
+                            )}
+                            <Text fontSize="xs" color="gray.500">
+                              {stockStatus.available} {stockStatus.unit} available
+                            </Text>
+                          </VStack>
+                        ) : (
+                          <Text fontSize="xs" color="gray.400">Not tracked</Text>
+                        )}
+                      </Td>
                     <Td>
                       <HStack spacing={2}>
                         <Button 
@@ -228,6 +252,7 @@ export default function PharmacyQueue({ onDispenseComplete }) {
                           colorScheme="green" 
                           leftIcon={<CheckIcon />}
                           onClick={() => openActionModal(rx, 'dispense')}
+                            isDisabled={isOutOfStock}
                         >
                           Dispense
                         </Button>
@@ -252,7 +277,8 @@ export default function PharmacyQueue({ onDispenseComplete }) {
                       </HStack>
                     </Td>
                   </Tr>
-                ))}
+                  );
+                })}
               </Tbody>
             </Table>
           </Box>
@@ -285,7 +311,23 @@ export default function PharmacyQueue({ onDispenseComplete }) {
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       placeholder="Enter quantity"
+                      min="1"
+                      max={selectedRx?.stockStatus?.available || undefined}
                     />
+                    {selectedRx?.stockStatus && (
+                      <Text fontSize="sm" color="gray.500" mt={1}>
+                        Available: {selectedRx.stockStatus.available} {selectedRx.stockStatus.unit}
+                        {selectedRx.stockStatus.isLowStock && (
+                          <Badge colorScheme="orange" ml={2} fontSize="xs">Low Stock</Badge>
+                        )}
+                      </Text>
+                    )}
+                    {selectedRx?.stockStatus?.isOutOfStock && (
+                      <Alert status="error" borderRadius="md" mt={2}>
+                        <AlertIcon />
+                        This medicine is out of stock. Please mark as stockout or restock inventory.
+                      </Alert>
+                    )}
                   </FormControl>
                 )}
 

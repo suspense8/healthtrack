@@ -17,4 +17,15 @@ router.patch('/prescriptions/:id/dispense', pharmacyController.dispensePrescript
 router.patch('/prescriptions/:id/stockout', pharmacyController.markStockout);
 router.patch('/prescriptions/:id/cancel', pharmacyController.cancelPrescription);
 
+// Medicine search (vector-based)
+router.post('/search-medicines', pharmacyController.searchMedicines);
+router.get('/medicines/autocomplete', pharmacyController.autocompleteMedicines);
+router.get('/medicines/:id', pharmacyController.getMedicineById);
+
+// Inventory management
+router.get('/inventory', pharmacyController.getAllMedicines);
+router.get('/inventory/stats', pharmacyController.getInventoryStats);
+router.patch('/inventory/:id', pharmacyController.updateInventory);
+router.post('/inventory/bulk', pharmacyController.bulkUpdateInventory);
+
 module.exports = router;

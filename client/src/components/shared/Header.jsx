@@ -32,12 +32,13 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
   };
 
   // Map module title to role for notifications
+  // These must match TOKEN_KEYS in api.js (receptionist, pharmacist, lab_tech, etc.)
   const getRoleFromModule = () => {
     const titleLower = moduleTitle?.toLowerCase() || '';
     if (titleLower.includes('nurse')) return 'nurse';
     if (titleLower.includes('doctor')) return 'doctor';
-    if (titleLower.includes('pharm')) return 'pharmacy';
-    if (titleLower.includes('lab')) return 'lab';
+    if (titleLower.includes('pharm')) return 'pharmacist';
+    if (titleLower.includes('lab')) return 'lab_tech';
     if (titleLower.includes('admin')) return 'admin';
     if (titleLower.includes('reception')) return 'receptionist';
     return user?.role || 'nurse';

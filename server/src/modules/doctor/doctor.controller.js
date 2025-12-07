@@ -3,6 +3,36 @@ const { logAction } = require('../shared/auditLogger');
 const vectorSearchService = require('../../services/vectorSearch.service');
 const notificationService = require('../../services/notification.service');
 
+const getVisit = async (req, res) => {
+  const { visitId } = req.params;
+  try {
+    const visit = await prisma.attendanceLog.findUnique({
+      where: { visit_id: parseInt(visitId) },
+      include: {
+        patient: {
+          select: {
+            patient_id: true,
+            first_name: true,
+            last_name: true,
+            date_of_birth: true,
+            gender: true,
+            national_id: true,
+            allergies: true,
+            existing_conditions: true
+          }
+        }
+      }
+    });
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+    res.json(visit);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch visit' });
+  }
+};
+
 const getQueue = async (req, res) => {
   try {
     const today = new Date();
@@ -83,6 +113,7 @@ const submitConsultation = async (req, res) => {
           visit_id: parseInt(visit_id),
           patient_id: patient_id,
           medication_name: p.medication_name,
+          medicine_id: p.medicine_id ? parseInt(p.medicine_id) : null,
           dosage: p.dosage,
           frequency: p.frequency,
           duration: p.duration,
@@ -169,19 +200,48 @@ const getPatientHistory = async (req, res) => {
   try {
     const history = await prisma.attendanceLog.findMany({
       where: { 
-        patient_id: parseInt(patientId),
-        queue_status: 'Completed' // Only show completed visits
+        patient_id: parseInt(patientId)
+        // Show all visits, not just completed ones
       },
       orderBy: { visit_date: 'desc' },
       select: {
         visit_id: true,
         visit_date: true,
         visit_reason: true,
+        queue_status: true,
+        is_emergency: true,
         diagnosis: true,
         treatment_plan: true,
         doctor_notes: true,
-        prescriptions: true,
-        lab_orders: true
+        symptoms: true,
+        // Vitals
+        systolic_bp: true,
+        diastolic_bp: true,
+        heart_rate: true,
+        temperature: true,
+        oxygen_saturation: true,
+        weight: true,
+        height: true,
+        triage_level: true,
+        nurse_notes: true,
+        // Related records
+        prescriptions: {
+          select: {
+            medication_name: true,
+            dosage: true,
+            frequency: true,
+            duration: true,
+            status: true
+          }
+        },
+        lab_orders: {
+          select: {
+            test_type: true,
+            urgency: true,
+            status: true,
+            results: true
+          }
+        }
       }
     });
     res.json(history);
@@ -346,6 +406,7 @@ const completeAppointment = async (req, res) => {
             visit_id: visit.visit_id,
             patient_id: visit.patient_id,
             medication_name: p.medication_name,
+            medicine_id: p.medicine_id ? parseInt(p.medicine_id) : null,
             dosage: p.dosage,
             frequency: p.frequency,
             duration: p.duration,
@@ -392,6 +453,35 @@ const getPrescriptions = async (req, res) => {
   }
 };
 
+const getPatient = async (req, res) => {
+  const { patientId } = req.params;
+  try {
+    const patient = await prisma.patient.findUnique({
+      where: { patient_id: parseInt(patientId) },
+      select: {
+        patient_id: true,
+        first_name: true,
+        last_name: true,
+        date_of_birth: true,
+        gender: true,
+        national_id: true,
+        phone_number: true,
+        address: true,
+        allergies: true,
+        existing_conditions: true,
+        date_registered: true
+      }
+    });
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+    res.json(patient);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch patient' });
+  }
+};
+
 const searchPatients = async (req, res) => {
   const { query, searchType } = req.query;
   
@@ -405,20 +495,24 @@ const searchPatients = async (req, res) => {
         take: 20,
       });
     } else if (searchType === 'phone' && query) {
-      // Exact match on phone_number
+      // Strip non-digits from phone query to match stored format
+      const normalizedPhone = query.replace(/\D/g, '');
       patients = await prisma.patient.findMany({
-        where: { phone_number: query },
+        where: { phone_number: normalizedPhone },
         take: 20,
       });
     } else if (query) {
+      // Normalize query to lowercase to match database storage
+      const normalizedQuery = query.toLowerCase().trim();
+      
       // Fuzzy search on name, id, phone
       patients = await prisma.patient.findMany({
         where: {
           OR: [
-            { first_name: { contains: query } },
-            { last_name: { contains: query } },
-            { national_id: { contains: query } },
-            { phone_number: { contains: query } },
+            { first_name: { contains: normalizedQuery } },
+            { last_name: { contains: normalizedQuery } },
+            { national_id: { contains: query } }, // Keep original case for ID
+            { phone_number: { contains: query.replace(/\D/g, '') } }, // Strip formatting
           ],
         },
         take: 20,
@@ -471,9 +565,258 @@ const getDiseaseById = async (req, res) => {
   }
 };
 
+/**
+ * Autocomplete diseases by name (fast, no vector search)
+ * GET /api/doctor/diseases/autocomplete?query=mal
+ */
+const autocompleteDiseases = async (req, res) => {
+  const { query } = req.query;
+  
+  if (!query || query.trim().length < 2) {
+    return res.json([]);
+  }
+  
+  const searchQuery = query.trim();
+  
+  try {
+    // Fast name-based search with fuzzy matching
+    const results = await prisma.$queryRaw`
+      SELECT 
+        id,
+        name,
+        description,
+        CASE 
+          WHEN LOWER(name) = LOWER(${searchQuery}) THEN 1.0
+          WHEN LOWER(name) LIKE LOWER(${searchQuery + '%'}) THEN 0.95
+          WHEN LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 0.85
+          ELSE similarity(LOWER(name), LOWER(${searchQuery}))
+        END as match_score
+      FROM diseases
+      WHERE 
+        LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'})
+        OR similarity(LOWER(name), LOWER(${searchQuery})) > 0.25
+      ORDER BY 
+        CASE 
+          WHEN LOWER(name) = LOWER(${searchQuery}) THEN 1
+          WHEN LOWER(name) LIKE LOWER(${searchQuery + '%'}) THEN 2
+          WHEN LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 3
+          ELSE 4
+        END,
+        similarity(LOWER(name), LOWER(${searchQuery})) DESC
+      LIMIT 8
+    `;
+    
+    res.json(results.map(r => ({
+      id: r.id,
+      name: r.name,
+      description: r.description?.substring(0, 100) + (r.description?.length > 100 ? '...' : ''),
+      matchScore: Math.round(Number(r.match_score) * 100)
+    })));
+  } catch (error) {
+    console.error('Autocomplete error:', error);
+    res.status(500).json({ error: 'Autocomplete failed' });
+  }
+};
+
+/**
+ * Search medicines by name, generic name, or description using vector similarity
+ * POST /api/doctor/search-medicines
+ */
+const searchMedicines = async (req, res) => {
+  const { query, limit = 10 } = req.body;
+  
+  try {
+    const results = await vectorSearchService.searchMedicines(query, { limit });
+    res.json(results);
+  } catch (error) {
+    console.error('Medicine search error:', error);
+    res.status(500).json({ error: 'Failed to search medicines' });
+  }
+};
+
+/**
+ * Get medicine details by ID
+ * GET /api/doctor/medicines/:id
+ */
+const getMedicineById = async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const medicine = await vectorSearchService.getMedicineById(id);
+    if (!medicine) {
+      return res.status(404).json({ error: 'Medicine not found' });
+    }
+    res.json(medicine);
+  } catch (error) {
+    console.error('Get medicine error:', error);
+    res.status(500).json({ error: 'Failed to fetch medicine' });
+  }
+};
+
+/**
+ * Autocomplete medicines by name (fast, no vector search)
+ * GET /api/doctor/medicines/autocomplete?query=par
+ */
+const autocompleteMedicines = async (req, res) => {
+  const { query } = req.query;
+  
+  if (!query || query.trim().length < 2) {
+    return res.json([]);
+  }
+  
+  const searchQuery = query.trim();
+  
+  try {
+    // Fast name-based search with fuzzy matching - includes inventory fields
+    const results = await prisma.$queryRaw`
+      SELECT 
+        id,
+        name,
+        generic_name,
+        ndc_code,
+        manufacturer,
+        quantity,
+        reorder_level,
+        unit,
+        CASE 
+          WHEN LOWER(name) = LOWER(${searchQuery}) THEN 1.0
+          WHEN LOWER(name) LIKE LOWER(${searchQuery + '%'}) THEN 0.95
+          WHEN LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 0.85
+          WHEN LOWER(generic_name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 0.80
+          ELSE similarity(LOWER(name), LOWER(${searchQuery}))
+        END as match_score
+      FROM medicines
+      WHERE 
+        LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'})
+        OR LOWER(generic_name) LIKE LOWER(${'%' + searchQuery + '%'})
+        OR LOWER(ndc_code) LIKE LOWER(${'%' + searchQuery + '%'})
+        OR similarity(LOWER(name), LOWER(${searchQuery})) > 0.25
+      ORDER BY 
+        CASE 
+          WHEN LOWER(name) = LOWER(${searchQuery}) THEN 1
+          WHEN LOWER(name) LIKE LOWER(${searchQuery + '%'}) THEN 2
+          WHEN LOWER(name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 3
+          WHEN LOWER(generic_name) LIKE LOWER(${'%' + searchQuery + '%'}) THEN 4
+          ELSE 5
+        END,
+        match_score DESC,
+        name ASC
+      LIMIT 50
+    `;
+    
+    // Deduplicate medicines by name, keeping only clinically different ones
+    const medicineMap = new Map();
+    const normalizedResults = results.map(r => ({
+      id: r.id,
+      name: r.name?.trim() || '',
+      genericName: r.generic_name?.trim() || null,
+      ndcCode: r.ndc_code?.trim() || null,
+      manufacturer: r.manufacturer?.trim() || null,
+      matchScore: Number(r.match_score),
+      quantity: r.quantity ?? 0,
+      reorderLevel: r.reorder_level ?? 10,
+      unit: r.unit || 'units',
+      isLowStock: (r.quantity ?? 0) <= (r.reorder_level ?? 10),
+      isOutOfStock: (r.quantity ?? 0) === 0
+    }));
+    
+    // Helper function to check if generic name is meaningfully different
+    const isGenericNameDifferent = (name1, name2) => {
+      if (!name1 || !name2) return false;
+      const n1 = name1.toLowerCase().trim();
+      const n2 = name2.toLowerCase().trim();
+      // If generic name is same as brand name, it's not meaningfully different
+      return n1 !== n2 && n1.length > 0 && n2.length > 0;
+    };
+    
+    // Helper function to extract strength/form from name
+    const extractStrengthForm = (name) => {
+      const match = name.match(/(\d+\s*(mg|g|ml|mcg|%|units?))|(tablet|capsule|syrup|injection|cream|ointment|drops?|inhaler|spray)/i);
+      return match ? match[0].toLowerCase() : null;
+    };
+    
+    for (const medicine of normalizedResults) {
+      const nameKey = medicine.name.toLowerCase();
+      const medicineStrengthForm = extractStrengthForm(medicine.name);
+      
+      // Check if we already have this exact name
+      if (!medicineMap.has(nameKey)) {
+        // First occurrence of this name
+        medicineMap.set(nameKey, medicine);
+      } else {
+        const existing = medicineMap.get(nameKey);
+        const existingStrengthForm = extractStrengthForm(existing.name);
+        
+        // Check if this medicine is clinically different (not just different manufacturer)
+        const isClinicallyDifferent = 
+          // Different generic names (and generic name is different from brand name)
+          isGenericNameDifferent(medicine.genericName, existing.genericName) ||
+          // Different strength/form in the name itself
+          (medicineStrengthForm && existingStrengthForm && 
+           medicineStrengthForm !== existingStrengthForm) ||
+          // One has generic name that's different from brand, other doesn't
+          (medicine.genericName && medicine.genericName.toLowerCase() !== nameKey && 
+           (!existing.genericName || existing.genericName.toLowerCase() === nameKey)) ||
+          (existing.genericName && existing.genericName.toLowerCase() !== nameKey && 
+           (!medicine.genericName || medicine.genericName.toLowerCase() === nameKey));
+        
+        if (isClinicallyDifferent) {
+          // Keep both if clinically different
+          if (Array.isArray(existing)) {
+            existing.push(medicine);
+          } else {
+            medicineMap.set(nameKey, [existing, medicine]);
+          }
+        } else {
+          // Same medicine, different manufacturer/NDC - keep only the best one
+          // Prefer higher match score
+          if (medicine.matchScore > existing.matchScore) {
+            medicineMap.set(nameKey, medicine);
+          } else if (medicine.matchScore === existing.matchScore) {
+            // If match scores equal, prefer the one with more complete information
+            const existingInfo = [existing.genericName, existing.manufacturer, existing.ndcCode].filter(Boolean).length;
+            const medicineInfo = [medicine.genericName, medicine.manufacturer, medicine.ndcCode].filter(Boolean).length;
+            if (medicineInfo > existingInfo) {
+              medicineMap.set(nameKey, medicine);
+            } else if (medicineInfo === existingInfo) {
+              // If still equal, prefer the one with generic name (if it's different from brand)
+              if (medicine.genericName && medicine.genericName.toLowerCase() !== nameKey && 
+                  (!existing.genericName || existing.genericName.toLowerCase() === nameKey)) {
+                medicineMap.set(nameKey, medicine);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Flatten the results (handle arrays of clinically different medicines)
+    const deduplicatedResults = [];
+    for (const value of medicineMap.values()) {
+      if (Array.isArray(value)) {
+        // Sort by match score and add all clinically different versions
+        value.sort((a, b) => b.matchScore - a.matchScore);
+        deduplicatedResults.push(...value);
+      } else {
+        deduplicatedResults.push(value);
+      }
+    }
+    
+    // Sort final results by match score and limit to 20
+    deduplicatedResults.sort((a, b) => b.matchScore - a.matchScore);
+    
+    res.json(deduplicatedResults.slice(0, 20));
+  } catch (error) {
+    console.error('Medicine autocomplete error:', error);
+    res.status(500).json({ error: 'Failed to autocomplete medicines' });
+  }
+};
+
 module.exports = {
   getQueue,
+  getVisit,
   submitConsultation,
+  getPatient,
   getPatientHistory,
   getAppointments,
   createAppointment,
@@ -483,6 +826,10 @@ module.exports = {
   getPrescriptions,
   searchPatients,
   searchDiseases,
-  getDiseaseById
+  getDiseaseById,
+  autocompleteDiseases,
+  searchMedicines,
+  getMedicineById,
+  autocompleteMedicines
 };
 

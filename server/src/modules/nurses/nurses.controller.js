@@ -43,6 +43,36 @@ const getQueue = async (req, res) => {
   }
 };
 
+const getVisit = async (req, res) => {
+  const { visitId } = req.params;
+  try {
+    const visit = await prisma.attendanceLog.findUnique({
+      where: { visit_id: parseInt(visitId) },
+      include: {
+        patient: {
+          select: {
+            patient_id: true,
+            first_name: true,
+            last_name: true,
+            date_of_birth: true,
+            gender: true,
+            national_id: true,
+            allergies: true,
+            existing_conditions: true
+          }
+        }
+      }
+    });
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
+    }
+    res.json(visit);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch visit' });
+  }
+};
+
 const updateVitals = async (req, res) => {
   const { 
     visit_id, 
@@ -290,8 +320,138 @@ const deleteBed = async (req, res) => {
   }
 };
 
+const getPatient = async (req, res) => {
+  const { patientId } = req.params;
+  try {
+    const patient = await prisma.patient.findUnique({
+      where: { patient_id: parseInt(patientId) },
+      select: {
+        patient_id: true,
+        first_name: true,
+        last_name: true,
+        date_of_birth: true,
+        gender: true,
+        national_id: true,
+        phone_number: true,
+        address: true,
+        allergies: true,
+        existing_conditions: true,
+        date_registered: true
+      }
+    });
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+    res.json(patient);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch patient' });
+  }
+};
+
+const searchPatients = async (req, res) => {
+  const { query, searchType } = req.query;
+  
+  try {
+    let patients = [];
+
+    if (searchType === 'id' && query) {
+      // Exact match on national_id
+      patients = await prisma.patient.findMany({
+        where: { national_id: query },
+        take: 20,
+      });
+    } else if (searchType === 'phone' && query) {
+      // Strip non-digits from phone query to match stored format
+      const normalizedPhone = query.replace(/\D/g, '');
+      patients = await prisma.patient.findMany({
+        where: { phone_number: normalizedPhone },
+        take: 20,
+      });
+    } else if (query) {
+      // Normalize query to lowercase to match database storage
+      const normalizedQuery = query.toLowerCase().trim();
+      
+      // Fuzzy search on name, id, phone
+      patients = await prisma.patient.findMany({
+        where: {
+          OR: [
+            { first_name: { contains: normalizedQuery } },
+            { last_name: { contains: normalizedQuery } },
+            { national_id: { contains: query } }, // Keep original case for ID
+            { phone_number: { contains: query.replace(/\D/g, '') } }, // Strip formatting
+          ],
+        },
+        take: 20,
+      });
+    }
+
+    res.json(patients);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Search failed' });
+  }
+};
+
+const getPatientHistory = async (req, res) => {
+  const { patientId } = req.params;
+  try {
+    const history = await prisma.attendanceLog.findMany({
+      where: { 
+        patient_id: parseInt(patientId)
+        // Show all visits, not just completed ones
+      },
+      orderBy: { visit_date: 'desc' },
+      select: {
+        visit_id: true,
+        visit_date: true,
+        visit_reason: true,
+        queue_status: true,
+        is_emergency: true,
+        diagnosis: true,
+        treatment_plan: true,
+        doctor_notes: true,
+        symptoms: true,
+        // Vitals
+        systolic_bp: true,
+        diastolic_bp: true,
+        heart_rate: true,
+        temperature: true,
+        oxygen_saturation: true,
+        weight: true,
+        height: true,
+        triage_level: true,
+        nurse_notes: true,
+        // Related records
+        prescriptions: {
+          select: {
+            medication_name: true,
+            dosage: true,
+            frequency: true,
+            duration: true,
+            status: true
+          }
+        },
+        lab_orders: {
+          select: {
+            test_type: true,
+            urgency: true,
+            status: true,
+            results: true
+          }
+        }
+      }
+    });
+    res.json(history);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch patient history' });
+  }
+};
+
 module.exports = {
   getQueue,
+  getVisit,
   updateVitals,
   // Ward management
   getWards,
@@ -300,5 +460,9 @@ module.exports = {
   getBeds,
   addBed,
   updateBed,
-  deleteBed
+  deleteBed,
+  // Patient management
+  getPatient,
+  searchPatients,
+  getPatientHistory
 };

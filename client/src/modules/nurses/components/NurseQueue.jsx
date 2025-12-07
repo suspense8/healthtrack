@@ -1,31 +1,16 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
-  Box, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, useToast, Heading, useDisclosure,
+  Box, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, useToast, Heading,
   IconButton, Tooltip
 } from '@chakra-ui/react';
 import { ViewIcon, EditIcon } from '@chakra-ui/icons';
 import api from '../../../services/api';
-import VitalsForm from './VitalsForm';
-import PatientDetailModal from './PatientDetailModal';
 
 export default function NurseQueue({ status = 'active' }) {
+  const navigate = useNavigate();
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedVisit, setSelectedVisit] = useState(null);
-  
-  // Modals
-  const { 
-    isOpen: isVitalsOpen, 
-    onOpen: onVitalsOpen, 
-    onClose: onVitalsClose 
-  } = useDisclosure();
-  
-  const { 
-    isOpen: isDetailOpen, 
-    onOpen: onDetailOpen, 
-    onClose: onDetailClose 
-  } = useDisclosure();
-
   const toast = useToast();
 
   const fetchQueue = async () => {
@@ -47,15 +32,7 @@ export default function NurseQueue({ status = 'active' }) {
   }, [status]);
 
   const handleRowClick = (visit) => {
-    setSelectedVisit(visit);
-    onDetailOpen();
-  };
-
-  const handleAction = (actionType) => {
-    if (actionType === 'triage') {
-      onDetailClose();
-      onVitalsOpen();
-    }
+    navigate(`/nurse/patient/${visit.visit_id}`);
   };
 
   return (
@@ -107,8 +84,7 @@ export default function NurseQueue({ status = 'active' }) {
                     leftIcon={<EditIcon />}
                     onClick={(e) => { 
                       e.stopPropagation(); 
-                      setSelectedVisit(visit); 
-                      onVitalsOpen(); 
+                      navigate(`/nurse/vitals/${visit.visit_id}`);
                     }}
                   >
                     Triage
@@ -120,23 +96,6 @@ export default function NurseQueue({ status = 'active' }) {
           {queue.length === 0 && <Tr><Td colSpan={5} textAlign="center">No patients found</Td></Tr>}
         </Tbody>
       </Table>
-
-      {selectedVisit && (
-        <>
-          <VitalsForm 
-            isOpen={isVitalsOpen} 
-            onClose={onVitalsClose} 
-            visit={selectedVisit} 
-            onSuccess={fetchQueue} 
-          />
-          <PatientDetailModal
-            isOpen={isDetailOpen}
-            onClose={onDetailClose}
-            visit={selectedVisit}
-            onAction={handleAction}
-          />
-        </>
-      )}
     </Box>
   );
 }

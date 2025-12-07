@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Heading, Text, VStack, Center } from '@chakra-ui/react';
 import DoctorLayout from '../components/DoctorLayout';
 import DoctorQueue from '../components/DoctorQueue';
@@ -10,15 +11,27 @@ import Prescriptions from '../components/Prescriptions';
 import AdmittedPatients from '../components/AdmittedPatients';
 
 export default function DoctorDashboard() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [consultationVisit, setConsultationVisit] = useState(null);
+  const { tab } = useParams();
+  const navigate = useNavigate();
+  
+  // Default to 'dashboard' if no tab specified
+  const activeTab = tab || 'dashboard';
+  
+  // Navigate to tab
+  const setActiveTab = (newTab) => {
+    navigate(`/doctor/${newTab}`);
+  };
+  
+  // Redirect to default if invalid tab
+  useEffect(() => {
+    const validTabs = ['dashboard', 'consultation', 'patients', 'appointments', 'prescriptions', 'admitted'];
+    if (tab && !validTabs.includes(tab)) {
+      navigate('/doctor/dashboard', { replace: true });
+    }
+  }, [tab, navigate]);
 
   const handleStartConsult = (visit) => {
-    setConsultationVisit(visit);
-  };
-
-  const handleConsultComplete = () => {
-    setConsultationVisit(null);
+    navigate(`/doctor/consultation/${visit.visit_id}`);
   };
 
   const renderContent = () => {
@@ -26,15 +39,6 @@ export default function DoctorDashboard() {
       case 'dashboard':
         return <DoctorAnalytics onNavigate={setActiveTab} />;
       case 'consultation':
-        if (consultationVisit) {
-          return (
-            <ConsultationView 
-              visit={consultationVisit} 
-              onBack={() => setConsultationVisit(null)}
-              onComplete={handleConsultComplete}
-            />
-          );
-        }
         return (
           <VStack spacing={6} align="stretch">
             <Box bg="white" p={6} borderRadius="lg" boxShadow="sm">

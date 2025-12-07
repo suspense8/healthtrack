@@ -1,21 +1,18 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Box, Input, Button, VStack, Text, Card, CardBody, Stack, 
-  Heading, Badge, HStack, IconButton, useDisclosure, Select, FormControl, FormLabel
+  Heading, Badge, HStack, IconButton, Select, FormControl, FormLabel
 } from '@chakra-ui/react';
 import { SearchIcon } from '@chakra-ui/icons';
 import api from '../../../services/api';
-import CheckInModal from './CheckInModal';
-import PatientVerificationModal from './PatientVerificationModal';
 
 export default function PatientSearch() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState('all');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [modalType, setModalType] = useState(null); // 'checkin' or 'verify'
-  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const handleSearch = async () => {
     if (!query) return;
@@ -31,15 +28,11 @@ export default function PatientSearch() {
   };
 
   const handleCheckInClick = (patient) => {
-    setSelectedPatient(patient);
-    setModalType('checkin');
-    onOpen();
+    navigate(`/reception/checkin/${patient.patient_id}`);
   };
 
   const handleVerifyClick = (patient) => {
-    setSelectedPatient(patient);
-    setModalType('verify');
-    onOpen();
+    navigate(`/reception/verify/${patient.patient_id}`);
   };
 
   return (
@@ -112,21 +105,6 @@ export default function PatientSearch() {
           <Text color="gray.500" textAlign="center">No patients found.</Text>
         )}
       </VStack>
-
-      {selectedPatient && modalType === 'checkin' && (
-        <CheckInModal 
-          isOpen={isOpen} 
-          onClose={onClose} 
-          patient={selectedPatient} 
-        />
-      )}
-      {selectedPatient && modalType === 'verify' && (
-        <PatientVerificationModal 
-          isOpen={isOpen} 
-          onClose={onClose} 
-          patient={selectedPatient} 
-        />
-      )}
     </Box>
   );
 }

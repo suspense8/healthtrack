@@ -1,20 +1,16 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, 
-  HStack, Text, Spinner, Center, VStack, useToast, useDisclosure,
-  Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, ModalFooter,
-  Alert, AlertIcon, Divider
+  HStack, Text, Spinner, Center, VStack, useToast, Alert, AlertIcon, Divider
 } from '@chakra-ui/react';
 import { CheckIcon } from '@chakra-ui/icons';
 import api from '../../../services/api';
 
 export default function DischargeQueue() {
+  const navigate = useNavigate();
   const [discharges, setDischarges] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDischarge, setSelectedDischarge] = useState(null);
-  const [processing, setProcessing] = useState(false);
-  
-  const { isOpen, onOpen, onClose } = useDisclosure();
   const toast = useToast();
 
   const fetchDischarges = async () => {
@@ -36,24 +32,6 @@ export default function DischargeQueue() {
     return () => clearInterval(interval);
   }, []);
 
-  const openConfirmModal = (discharge) => {
-    setSelectedDischarge(discharge);
-    onOpen();
-  };
-
-  const handleConfirmDischarge = async () => {
-    setProcessing(true);
-    try {
-      await api.patch(`/admission/${selectedDischarge.admission_id}/confirm-discharge`);
-      toast({ title: 'Patient discharged successfully. Bed is now available.', status: 'success' });
-      onClose();
-      fetchDischarges();
-    } catch (error) {
-      toast({ title: 'Failed to confirm discharge', status: 'error' });
-    } finally {
-      setProcessing(false);
-    }
-  };
 
   if (loading) {
     return <Center h="300px"><Spinner size="xl" color="purple.500" /></Center>;
@@ -127,7 +105,7 @@ export default function DischargeQueue() {
               <Button 
                 colorScheme="green" 
                 leftIcon={<CheckIcon />}
-                onClick={() => openConfirmModal(d)}
+                onClick={() => navigate(`/nurse/discharge/confirm/${d.admission_id}`)}
               >
                 Confirm Discharge
               </Button>
@@ -135,55 +113,6 @@ export default function DischargeQueue() {
           </Box>
         ))}
       </VStack>
-
-      {/* Confirm Discharge Modal */}
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Confirm Patient Discharge</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            {selectedDischarge && (
-              <VStack spacing={4} align="stretch">
-                <Box p={3} bg="blue.50" borderRadius="md">
-                  <Text fontWeight="bold">
-                    {selectedDischarge.patient?.first_name} {selectedDischarge.patient?.last_name}
-                  </Text>
-                  <Text fontSize="sm">
-                    {selectedDischarge.ward?.ward_name} - Bed {selectedDischarge.bed?.bed_number}
-                  </Text>
-                </Box>
-
-                <Alert status="info" borderRadius="md">
-                  <AlertIcon />
-                  <Box>
-                    <Text fontWeight="bold">This will:</Text>
-                    <Text fontSize="sm">• Mark patient as Discharged</Text>
-                    <Text fontSize="sm">• Free up Bed {selectedDischarge.bed?.bed_number}</Text>
-                    {selectedDischarge.follow_up_date && (
-                      <Text fontSize="sm">• Create follow-up appointment</Text>
-                    )}
-                  </Box>
-                </Alert>
-
-                <Text fontSize="sm" color="gray.600">
-                  Please ensure the patient has received their discharge instructions and medications.
-                </Text>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button mr={3} onClick={onClose}>Cancel</Button>
-            <Button 
-              colorScheme="green" 
-              onClick={handleConfirmDischarge}
-              isLoading={processing}
-            >
-              Confirm Discharge
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
     </Box>
   );
 }

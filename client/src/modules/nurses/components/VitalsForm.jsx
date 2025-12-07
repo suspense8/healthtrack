@@ -5,6 +5,8 @@ import {
   NumberInput, NumberInputField, HStack, RadioGroup, Radio, Stack, useToast
 } from '@chakra-ui/react';
 import api from '../../../services/api';
+import ValidatedInput from '../../../components/shared/ValidatedInput';
+import { getVitalThresholdWarning, validateVitalRange } from '../../../utils/validationSchemas';
 
 export default function VitalsForm({ isOpen, onClose, visit, onSuccess }) {
   const [formData, setFormData] = useState({
@@ -22,6 +24,12 @@ export default function VitalsForm({ isOpen, onClose, visit, onSuccess }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Get validation error for a vital field
+  const getVitalError = (fieldName, value) => {
+    if (!value) return null;
+    return validateVitalRange(fieldName, value);
   };
 
   const handleSubmit = async () => {
@@ -52,31 +60,83 @@ export default function VitalsForm({ isOpen, onClose, visit, onSuccess }) {
             <SimpleGrid columns={2} spacing={4} w="full">
               <FormControl>
                 <FormLabel>Blood Pressure (mmHg)</FormLabel>
-                <HStack>
-                  <Input placeholder="Sys" name="systolic_bp" value={formData.systolic_bp} onChange={handleChange} />
-                  <Input placeholder="Dia" name="diastolic_bp" value={formData.diastolic_bp} onChange={handleChange} />
+                <HStack align="flex-start" spacing={2}>
+                  <ValidatedInput
+                    placeholder="Systolic"
+                    name="systolic_bp"
+                    value={formData.systolic_bp}
+                    onChange={handleChange}
+                    type="number"
+                    error={getVitalError('systolicBP', formData.systolic_bp)?.message}
+                    warning={getVitalThresholdWarning('systolicBP', formData.systolic_bp)}
+                    width="100px"
+                  />
+                  <Text fontSize="sm" color="gray.500" mt={2}>/</Text>
+                  <ValidatedInput
+                    placeholder="Diastolic"
+                    name="diastolic_bp"
+                    value={formData.diastolic_bp}
+                    onChange={handleChange}
+                    type="number"
+                    error={getVitalError('diastolicBP', formData.diastolic_bp)?.message}
+                    warning={getVitalThresholdWarning('diastolicBP', formData.diastolic_bp)}
+                    width="100px"
+                  />
                 </HStack>
               </FormControl>
-              <FormControl>
-                <FormLabel>Heart Rate (bpm)</FormLabel>
-                <Input name="heart_rate" value={formData.heart_rate} onChange={handleChange} />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Resp. Rate (bpm)</FormLabel>
-                <Input name="respiratory_rate" value={formData.respiratory_rate} onChange={handleChange} />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Temperature (°C)</FormLabel>
-                <Input name="temperature" value={formData.temperature} onChange={handleChange} />
-              </FormControl>
-              <FormControl>
-                <FormLabel>O2 Saturation (%)</FormLabel>
-                <Input name="oxygen_saturation" value={formData.oxygen_saturation} onChange={handleChange} />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Weight (kg)</FormLabel>
-                <Input name="weight" value={formData.weight} onChange={handleChange} />
-              </FormControl>
+              <ValidatedInput
+                label="Heart Rate (bpm)"
+                name="heart_rate"
+                value={formData.heart_rate}
+                onChange={handleChange}
+                type="number"
+                error={getVitalError('heartRate', formData.heart_rate)?.message}
+                warning={getVitalThresholdWarning('heartRate', formData.heart_rate)}
+              />
+              <ValidatedInput
+                label="Respiratory Rate (bpm)"
+                name="respiratory_rate"
+                value={formData.respiratory_rate}
+                onChange={handleChange}
+                type="number"
+                error={getVitalError('respiratoryRate', formData.respiratory_rate)?.message}
+              />
+              <ValidatedInput
+                label="Temperature (°C)"
+                name="temperature"
+                value={formData.temperature}
+                onChange={handleChange}
+                type="number"
+                step="0.1"
+                error={getVitalError('temperature', formData.temperature)?.message}
+                warning={getVitalThresholdWarning('temperature', formData.temperature)}
+              />
+              <ValidatedInput
+                label="O2 Saturation (%)"
+                name="oxygen_saturation"
+                value={formData.oxygen_saturation}
+                onChange={handleChange}
+                type="number"
+                error={getVitalError('oxygenSaturation', formData.oxygen_saturation)?.message}
+                warning={getVitalThresholdWarning('oxygenSaturation', formData.oxygen_saturation)}
+              />
+              <ValidatedInput
+                label="Weight (kg)"
+                name="weight"
+                value={formData.weight}
+                onChange={handleChange}
+                type="number"
+                step="0.1"
+                error={getVitalError('weight', formData.weight)?.message}
+              />
+              <ValidatedInput
+                label="Height (cm)"
+                name="height"
+                value={formData.height}
+                onChange={handleChange}
+                type="number"
+                error={getVitalError('height', formData.height)?.message}
+              />
             </SimpleGrid>
 
             <FormControl>

@@ -15,6 +15,7 @@ model Patient {
   last_name               String    @db.VarChar(150)
   middle_name             String?   @db.VarChar(150)
   date_of_birth           DateTime? @db.Date
+  age                     Int?
   gender                  String?   @db.VarChar(16)
   national_id             String?   @unique @db.VarChar(64)
   patient_type            String    @db.VarChar(32)
@@ -133,6 +134,7 @@ model Prescription {
   visit_id        Int
   patient_id      Int
   medication_name String   @db.VarChar(128)
+  medicine_id     Int?     // Optional link to Medicine record
   dosage          String   @db.VarChar(64)
   frequency       String   @db.VarChar(64)
   duration        String   @db.VarChar(64)
@@ -146,6 +148,7 @@ model Prescription {
 
   visit   AttendanceLog @relation(fields: [visit_id], references: [visit_id], onDelete: Cascade)
   patient Patient       @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+  medicine Medicine?     @relation(fields: [medicine_id], references: [id], onDelete: SetNull)
 }
 
 model ReceptionAudit {
@@ -262,4 +265,38 @@ model Disease {
   created_at  DateTime @default(now())
 
   @@map("diseases")
+}
+
+// ============== MEDICINE VECTOR SEARCH ==============
+
+model Medicine {
+  id            Int     @id @default(autoincrement())
+  name          String  @db.VarChar(255)  // Product name
+  generic_name  String? @db.VarChar(255)
+  ndc_code      String? @db.VarChar(32)
+  manufacturer  String? @db.VarChar(255)
+  title         String? @db.Text  // Full product title/description
+  ingredients   String? @db.Text   // JSON string of ingredients
+  description   String? @db.Text   // Generated description for search
+  
+  // Vector embedding for semantic search (384 dimensions for MiniLM)
+  embedding     Unsupported("vector(384)")?
+
+  // Inventory tracking
+  quantity      Int     @default(0)  // Current stock quantity
+  reorder_level Int     @default(10) // Minimum stock level before reorder
+  unit          String  @default("units") @db.VarChar(32) // Unit of measurement (units, tablets, bottles, etc.)
+  last_restocked DateTime? // Last restock date
+  last_restocked_by Int? // User who last restocked
+
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  prescriptions Prescription[]
+
+  @@index([name])
+  @@index([generic_name])
+  @@index([ndc_code])
+  @@index([quantity]) // Index for low stock queries
+  @@map("medicines")
 }

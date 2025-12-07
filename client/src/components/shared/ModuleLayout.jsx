@@ -1,7 +1,7 @@
 import { Box, Flex, VStack, Icon, Text, Heading, Divider } from '@chakra-ui/react';
 import { FiLogOut } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Header from './Header';
 
 const NavItem = ({ icon, children, isActive, onClick, color }) => (
@@ -42,6 +42,29 @@ export default function ModuleLayout({
 }) {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Determine module path from current location
+  const getModulePath = () => {
+    const path = location.pathname;
+    if (path.startsWith('/reception')) return '/reception';
+    if (path.startsWith('/nurse')) return '/nurse';
+    if (path.startsWith('/doctor')) return '/doctor';
+    if (path.startsWith('/pharmacy')) return '/pharmacy';
+    if (path.startsWith('/admin')) return '/admin';
+    return '';
+  };
+  
+  const modulePath = getModulePath();
+  
+  // Handle tab navigation
+  const handleTabClick = (tabId) => {
+    if (setActiveTab) {
+      setActiveTab(tabId);
+    } else if (modulePath) {
+      navigate(`${modulePath}/${tabId}`);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -83,7 +106,7 @@ export default function ModuleLayout({
               key={item.id}
               icon={item.icon} 
               isActive={activeTab === item.id} 
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => handleTabClick(item.id)}
               color={color}
             >
               {item.label}

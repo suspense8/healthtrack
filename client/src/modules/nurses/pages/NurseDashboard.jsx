@@ -9,6 +9,7 @@ import AdmissionsQueue from '../components/AdmissionsQueue';
 import WardDashboard from '../components/WardDashboard';
 import DischargeQueue from '../components/DischargeQueue';
 import CompletedToday from '../components/CompletedToday';
+import PatientManagement from '../components/PatientManagement';
 
 const navItems = [
   { id: 'queue', label: 'Vitals Queue', icon: FiActivity },
@@ -16,6 +17,7 @@ const navItems = [
   { id: 'ward', label: 'Ward Management', icon: FaBed },
   { id: 'discharges', label: 'Pending Discharges', icon: FaSignOutAlt },
   { id: 'completed', label: 'Completed Today', icon: FiCheckSquare },
+  { id: 'patients', label: 'Patient Management', icon: FiUsers },
 ];
 
 export default function NurseDashboard() {
@@ -32,7 +34,7 @@ export default function NurseDashboard() {
   
   // Redirect to default if invalid tab
   useEffect(() => {
-    const validTabs = ['queue', 'admissions', 'ward', 'discharges', 'completed'];
+    const validTabs = ['queue', 'admissions', 'ward', 'discharges', 'completed', 'patients'];
     if (tab && !validTabs.includes(tab)) {
       navigate('/nurse/queue', { replace: true });
     }
@@ -50,6 +52,8 @@ export default function NurseDashboard() {
         return <DischargeQueue />;
       case 'completed':
         return <CompletedToday />;
+      case 'patients':
+        return <PatientManagement />;
       default:
         return <NurseQueue status="active" />;
     }

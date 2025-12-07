@@ -7,10 +7,12 @@ import { FaClock, FaCheckCircle, FaExclamationTriangle, FaPills, FaHistory } fro
 import ModuleLayout from '../../../components/shared/ModuleLayout';
 import PharmacyQueue from '../components/PharmacyQueue';
 import PrescriptionHistory from '../components/PrescriptionHistory';
+import InventoryManagement from '../components/InventoryManagement';
 import api from '../../../services/api';
 
 const navItems = [
   { id: 'queue', label: 'Dispensing Queue', icon: FaClock },
+  { id: 'inventory', label: 'Inventory Management', icon: FaPills },
   { id: 'history', label: 'Prescription History', icon: FaHistory },
 ];
 
@@ -29,7 +31,7 @@ export default function PharmacyDashboard() {
   
   // Redirect to default if invalid tab
   useEffect(() => {
-    const validTabs = ['queue', 'history'];
+    const validTabs = ['queue', 'inventory', 'history'];
     if (tab && !validTabs.includes(tab)) {
       navigate('/pharmacy/queue', { replace: true });
     }
@@ -75,6 +77,8 @@ export default function PharmacyDashboard() {
     switch (activeTab) {
       case 'queue':
         return <PharmacyQueue onDispenseComplete={handleDispenseComplete} />;
+      case 'inventory':
+        return <InventoryManagement />;
       case 'history':
         return <PrescriptionHistory />;
       default:
