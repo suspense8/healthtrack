@@ -126,11 +126,11 @@ export default function Login({ module }) {
           )}
           
           <FormControl isRequired>
-            <FormLabel>Username</FormLabel>
+            <FormLabel>Staff ID</FormLabel>
             <Input 
               value={username} 
               onChange={(e) => setUsername(e.target.value)} 
-              placeholder="Enter your username"
+              placeholder="Enter your staff ID"
               size="lg"
             />
           </FormControl>

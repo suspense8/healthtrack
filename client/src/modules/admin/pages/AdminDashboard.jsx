@@ -5,7 +5,7 @@ import {
   HStack, IconButton, AlertDialog, AlertDialogBody, AlertDialogFooter,
   AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, useDisclosure,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton,
-  FormControl, FormLabel, Input, VStack, ModalFooter
+  FormControl, FormLabel, Input, VStack, ModalFooter, Text
 } from '@chakra-ui/react';
 import { DeleteIcon, SettingsIcon, AddIcon } from '@chakra-ui/icons';
 import { FaChartLine, FaUsers, FaRoute, FaHistory, FaUsersCog, FaCog, FaUserShield, FaDatabase } from 'react-icons/fa';
@@ -55,7 +55,7 @@ export default function AdminDashboard() {
   
   // Create User Modal State
   const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCreateClose } = useDisclosure();
-  const [newUser, setNewUser] = useState({ username: '', password: '', role: 'doctor' });
+  const [newUser, setNewUser] = useState({ name: '', staff_id: '', password: '', role: 'doctor' });
   const [creating, setCreating] = useState(false);
 
   const toast = useToast();
@@ -103,7 +103,7 @@ export default function AdminDashboard() {
   };
 
   const handleCreateUser = async () => {
-    if (!newUser.username || !newUser.password) {
+    if (!newUser.name || !newUser.staff_id || !newUser.password) {
       toast({ title: 'Please fill all fields', status: 'warning' });
       return;
     }
@@ -113,7 +113,7 @@ export default function AdminDashboard() {
       await api.post('/admin/users', newUser);
       toast({ title: 'User created successfully', status: 'success' });
       onCreateClose();
-      setNewUser({ username: '', password: '', role: 'doctor' });
+      setNewUser({ name: '', staff_id: '', password: '', role: 'doctor' });
       fetchUsers();
     } catch (error) {
       toast({ 
@@ -151,8 +151,8 @@ export default function AdminDashboard() {
             <Table variant="simple">
               <Thead>
                 <Tr>
-                  <Th>ID</Th>
-                  <Th>Username</Th>
+                  <Th>Name</Th>
+                  <Th>Staff ID</Th>
                   <Th>Role</Th>
                   <Th>Created</Th>
                   <Th>Actions</Th>
@@ -161,8 +161,10 @@ export default function AdminDashboard() {
               <Tbody>
                 {users.map((user) => (
                   <Tr key={user.user_id}>
-                    <Td>{user.user_id}</Td>
-                    <Td fontWeight="bold">{user.username}</Td>
+                    <Td fontWeight="bold">{user.name}</Td>
+                    <Td>
+                      <Text fontSize="sm" color="gray.600">{user.staff_id}</Text>
+                    </Td>
                     <Td>
                       <Select
                         size="sm"
@@ -247,11 +249,19 @@ export default function AdminDashboard() {
           <ModalBody>
             <VStack spacing={4}>
               <FormControl isRequired>
-                <FormLabel>Username</FormLabel>
+                <FormLabel>Name</FormLabel>
                 <Input 
-                  value={newUser.username}
-                  onChange={(e) => setNewUser({...newUser, username: e.target.value})}
-                  placeholder="e.g. dr_smith"
+                  value={newUser.name}
+                  onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                  placeholder="e.g. Dr. John Smith"
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>Staff ID</FormLabel>
+                <Input 
+                  value={newUser.staff_id}
+                  onChange={(e) => setNewUser({...newUser, staff_id: e.target.value})}
+                  placeholder="e.g. EMP001 or National ID"
                 />
               </FormControl>
               <FormControl isRequired>

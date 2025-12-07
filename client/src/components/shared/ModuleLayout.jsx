@@ -112,21 +112,6 @@ export default function ModuleLayout({
               {item.label}
             </NavItem>
           ))}
-          
-          <Box pt={8}>
-            <Divider mb={4} />
-            <Box px={6} py={2}>
-              <Text fontSize="xs" color="gray.400" textTransform="uppercase">
-                Signed in as
-              </Text>
-              <Text fontSize="sm" fontWeight="bold" color="gray.600">
-                {user?.username || 'User'}
-              </Text>
-            </Box>
-            <NavItem icon={FiLogOut} onClick={handleLogout} color="red">
-              Logout
-            </NavItem>
-          </Box>
         </VStack>
       </Box>
 

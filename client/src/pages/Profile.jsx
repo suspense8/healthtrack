@@ -172,18 +172,26 @@ export default function Profile() {
             <CardBody>
               <VStack align="stretch" spacing={4}>
                 <FormControl>
-                  <FormLabel>Username</FormLabel>
+                  <FormLabel>Name</FormLabel>
                   {isEditingProfile ? (
                     <Input
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Enter username"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Enter your name"
                       autoFocus
                     />
                   ) : (
-                    <Text fontSize="lg" fontWeight="medium">{user?.username}</Text>
+                    <Text fontSize="lg" fontWeight="medium">{user?.name}</Text>
                   )}
                 </FormControl>
+
+                <Divider />
+
+                <Box>
+                  <Text fontWeight="bold" color="gray.600" mb={1}>Staff ID</Text>
+                  <Text fontSize="lg" color="gray.700">{user?.staff_id || 'N/A'}</Text>
+                  <Text fontSize="xs" color="gray.500" mt={1}>Staff ID cannot be changed</Text>
+                </Box>
 
                 <Divider />
 

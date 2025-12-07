@@ -5,10 +5,16 @@ const { logAction } = require('../shared/auditLogger');
 
 // Login only - registration is admin-only
 const login = async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password } = req.body; // username field will contain staff_id
 
   try {
-    const user = await prisma.user.findUnique({ where: { username } });
+    // First try to find by staff_id, then fallback to username for backwards compatibility
+    let user = await prisma.user.findUnique({ where: { staff_id: username } });
+    
+    if (!user) {
+      // Fallback to username for backwards compatibility
+      user = await prisma.user.findUnique({ where: { username } });
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -20,12 +26,14 @@ const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate JWT with user info including role
+    // Generate JWT with user info including role, name, and staff_id
     const token = jwt.sign(
       { 
         userId: user.user_id, 
         role: user.role,
-        username: user.username 
+        username: user.username,
+        name: user.name,
+        staff_id: user.staff_id
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
@@ -38,7 +46,8 @@ const login = async (req, res) => {
       entity: 'User',
       entityId: user.user_id,
       afterSnapshot: {
-        username: user.username,
+        name: user.name,
+        staff_id: user.staff_id,
         role: user.role
       }
     });
@@ -47,7 +56,9 @@ const login = async (req, res) => {
       token, 
       user: { 
         id: user.user_id, 
-        username: user.username, 
+        username: user.username,
+        name: user.name,
+        staff_id: user.staff_id,
         role: user.role 
       } 
     });
@@ -81,12 +92,12 @@ const me = async (req, res) => {
   }
 };
 
-// Update user profile (username only)
+// Update user profile (name only)
 const updateProfile = async (req, res) => {
-  const { username } = req.body;
+  const { name } = req.body;
 
-  if (!username || !username.trim()) {
-    return res.status(400).json({ error: 'Username is required' });
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Name is required' });
   }
 
   try {
@@ -99,21 +110,14 @@ const updateProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check if new username is already taken by another user
-    const existingUser = await prisma.user.findUnique({
-      where: { username: username.trim() }
-    });
-
-    if (existingUser && existingUser.user_id !== req.user.userId) {
-      return res.status(409).json({ error: 'Username already exists' });
-    }
-
-    // Update username
+    // Update name (staff_id is immutable)
     const updatedUser = await prisma.user.update({
       where: { user_id: req.user.userId },
-      data: { username: username.trim() },
+      data: { name: name.trim() },
       select: {
         user_id: true,
+        name: true,
+        staff_id: true,
         username: true,
         role: true,
         created_at: true
@@ -126,8 +130,8 @@ const updateProfile = async (req, res) => {
       action: 'UPDATE_PROFILE',
       entity: 'User',
       entityId: req.user.userId,
-      beforeSnapshot: { username: currentUser.username },
-      afterSnapshot: { username: updatedUser.username }
+      beforeSnapshot: { name: currentUser.name },
+      afterSnapshot: { name: updatedUser.name }
     });
 
     res.json(updatedUser);

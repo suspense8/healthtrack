@@ -164,10 +164,13 @@ model ReceptionAudit {
 
 model User {
   user_id       Int      @id @default(autoincrement())
+  name          String   @db.VarChar(150)
+  staff_id      String   @unique @db.VarChar(50)
   username      String   @unique @db.VarChar(50)
   password_hash String   @db.VarChar(255)
   role          String   @default("receptionist") @db.VarChar(20)
   created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
 }
 
 // ============== ADMISSION SYSTEM ==============

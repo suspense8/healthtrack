@@ -474,6 +474,8 @@ const getUsers = async (req, res) => {
     const users = await prisma.user.findMany({
       select: {
         user_id: true,
+        name: true,
+        staff_id: true,
         username: true,
         role: true,
         created_at: true
@@ -548,10 +550,10 @@ const deleteUser = async (req, res) => {
 
 // Create new user (admin only)
 const createUser = async (req, res) => {
-  const { username, password, role } = req.body;
+  const { name, staff_id, password, role } = req.body;
 
-  if (!username || !password || !role) {
-    return res.status(400).json({ error: 'Username, password, and role are required' });
+  if (!name || !staff_id || !password || !role) {
+    return res.status(400).json({ error: 'Name, Staff ID, password, and role are required' });
   }
 
   const validRoles = ['admin', 'doctor', 'nurse', 'receptionist', 'lab_tech', 'pharmacist'];
@@ -563,8 +565,13 @@ const createUser = async (req, res) => {
     const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Auto-generate username from staff_id for backwards compatibility
+    const username = staff_id;
+
     const user = await prisma.user.create({
       data: {
+        name: name.trim(),
+        staff_id: staff_id.trim(),
         username,
         password_hash: hashedPassword,
         role
@@ -577,17 +584,26 @@ const createUser = async (req, res) => {
       action: 'CREATE_USER',
       entity: 'User',
       entityId: user.user_id,
-      afterSnapshot: { username: user.username, role: user.role }
+      afterSnapshot: { name: user.name, staff_id: user.staff_id, role: user.role }
     });
 
     res.status(201).json({
       message: 'User created successfully',
-      user: { user_id: user.user_id, username: user.username, role: user.role }
+      user: { 
+        user_id: user.user_id, 
+        name: user.name, 
+        staff_id: user.staff_id, 
+        role: user.role 
+      }
     });
   } catch (error) {
     console.error(error);
     if (error.code === 'P2002') {
-      return res.status(409).json({ error: 'Username already exists' });
+      // Check which field caused the conflict
+      if (error.meta?.target?.includes('staff_id')) {
+        return res.status(409).json({ error: 'Staff ID already exists' });
+      }
+      return res.status(409).json({ error: 'User already exists' });
     }
     res.status(500).json({ error: 'Failed to create user' });
   }

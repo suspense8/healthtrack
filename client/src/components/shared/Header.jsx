@@ -121,21 +121,21 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
             _hover={{ bg: 'gray.100' }}
           >
             <HStack>
-              <Avatar size="sm" name={user?.username} bg={`${moduleColor}.500`} color="white" />
-              <Text display={{ base: 'none', md: 'block' }} fontWeight="medium">{user?.username}</Text>
+              <Avatar size="sm" name={user?.name} bg={`${moduleColor}.500`} color="white" />
+              <Text display={{ base: 'none', md: 'block' }} fontWeight="medium">{user?.name}</Text>
             </HStack>
           </MenuButton>
           <MenuList minW="280px" p={0}>
             {/* User Info Section */}
             <Box p={4} bg="gray.50" borderBottom="1px" borderColor="gray.100">
               <HStack spacing={3}>
-                <Avatar size="lg" name={user?.username} bg={`${moduleColor}.500`} color="white" />
+                <Avatar size="lg" name={user?.name} bg={`${moduleColor}.500`} color="white" />
                 <VStack align="start" spacing={0}>
-                  <Text fontWeight="bold" fontSize="lg">{user?.username}</Text>
+                  <Text fontWeight="bold" fontSize="lg">{user?.name}</Text>
                   <Badge colorScheme={getRoleBadgeColor(user?.role)} textTransform="capitalize">
                     {user?.role || 'Staff'}
                   </Badge>
-                  <Text fontSize="xs" color="gray.500" mt={1}>ID: {user?.userId}</Text>
+                  <Text fontSize="xs" color="gray.500" mt={1}>Staff ID: {user?.staff_id}</Text>
                 </VStack>
               </HStack>
             </Box>
