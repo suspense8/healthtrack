@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { Box, Spinner, Center } from '@chakra-ui/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
+import Profile from './pages/Profile';
 import ReceptionDashboard from './modules/reception/pages/ReceptionDashboard';
 import NurseDashboard from './modules/nurses/pages/NurseDashboard';
 import DoctorDashboard from './modules/doctor/pages/DoctorDashboard';
@@ -65,6 +66,56 @@ function AppRoutes() {
       
       {/* Default login redirects to reception */}
       <Route path="/login" element={<Navigate to="/reception/login" replace />} />
+      
+      {/* Module-specific profile routes */}
+      <Route 
+        path="/reception/profile" 
+        element={
+          <ProtectedRoute module="reception">
+            <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/nurse/profile" 
+        element={
+          <ProtectedRoute module="nurse">
+            <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/doctor/profile" 
+        element={
+          <ProtectedRoute module="doctor">
+            <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/profile" 
+        element={
+          <ProtectedRoute module="admin">
+            <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/pharmacy/profile" 
+        element={
+          <ProtectedRoute module="pharmacy">
+            <Profile />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/lab/profile" 
+        element={
+          <ProtectedRoute module="lab">
+            <Profile />
+          </ProtectedRoute>
+        } 
+      />
       
       {/* Protected module routes with nested tab routes */}
       <Route

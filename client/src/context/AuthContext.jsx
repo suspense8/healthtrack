@@ -89,6 +89,26 @@ export const AuthProvider = ({ children }) => {
     return sessions[role] || null;
   };
 
+  // Update user data in session (e.g., after profile update)
+  const updateUser = (updatedUserData) => {
+    const role = updatedUserData.role;
+    if (role && sessions[role]) {
+      setSessions(prev => ({
+        ...prev,
+        [role]: { ...prev[role], ...updatedUserData }
+      }));
+    }
+  };
+
+  // Get current user (from any session - returns first available)
+  const getCurrentUser = () => {
+    const sessionRoles = Object.keys(sessions);
+    if (sessionRoles.length > 0) {
+      return sessions[sessionRoles[0]];
+    }
+    return null;
+  };
+
   return (
     <AuthContext.Provider value={{ 
       sessions, 
@@ -97,6 +117,8 @@ export const AuthProvider = ({ children }) => {
       logoutAll, 
       isLoggedIn, 
       getSession,
+      updateUser,
+      user: getCurrentUser(), // Current user object
       loading 
     }}>
       {children}
@@ -105,3 +127,4 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+

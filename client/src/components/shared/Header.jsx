@@ -4,7 +4,7 @@ import {
 } from '@chakra-ui/react';
 import { ChevronDownIcon } from '@chakra-ui/icons';
 import { FiUser, FiLogOut, FiSettings } from 'react-icons/fi';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useOffline } from '../../context/OfflineContext';
 import NotificationBell from '../NotificationBell';
@@ -13,6 +13,7 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
   const { user, logout } = useAuth();
   const { isOnline, pendingCount, triggerSync } = useOffline();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -42,6 +43,23 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
     if (titleLower.includes('admin')) return 'admin';
     if (titleLower.includes('reception')) return 'receptionist';
     return user?.role || 'nurse';
+  };
+
+  // Get current module from URL path
+  const getCurrentModule = () => {
+    const path = location.pathname;
+    if (path.startsWith('/reception')) return 'reception';
+    if (path.startsWith('/nurse')) return 'nurse';
+    if (path.startsWith('/doctor')) return 'doctor';
+    if (path.startsWith('/admin')) return 'admin';
+    if (path.startsWith('/pharmacy')) return 'pharmacy';
+    if (path.startsWith('/lab')) return 'lab';
+    return 'reception'; // default
+  };
+
+  const handleProfileClick = () => {
+    const module = getCurrentModule();
+    navigate(`/${module}/profile`);
   };
 
   return (
@@ -124,10 +142,10 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
             
             {/* Menu Items */}
             <Box py={2}>
-              <MenuItem icon={<Icon as={FiUser} />} onClick={() => navigate('/profile')}>
+              <MenuItem icon={<Icon as={FiUser} />} onClick={handleProfileClick}>
                 My Profile
               </MenuItem>
-              <MenuItem icon={<Icon as={FiSettings} />}>
+              <MenuItem icon={<Icon as={FiSettings} />} onClick={handleProfileClick}>
                 Account Settings
               </MenuItem>
               <MenuDivider />
@@ -146,4 +164,3 @@ export default function Header({ moduleTitle, moduleColor = 'blue' }) {
     </Box>
   );
 }
-
