@@ -110,6 +110,11 @@ model AttendanceLog {
   // Relations
   lab_orders    LabOrder[]
   prescriptions Prescription[]
+  obstetric_visit ObstetricVisit?
+  tasks         Task[]
+  
+  // Emergency classification
+  emergency_subtype String? @db.VarChar(32) // "Labor", "Bleeding", "Trauma", "Respiratory", etc.
 }
 
 model LabOrder {
@@ -302,4 +307,156 @@ model Medicine {
   @@index([ndc_code])
   @@index([quantity]) // Index for low stock queries
   @@map("medicines")
+}
+
+// ============================================
+// OBSTETRIC & EMERGENCY LABOR WORKFLOW MODELS
+// ============================================
+
+model ObstetricVisit {
+  obstetric_visit_id   Int      @id @default(autoincrement())
+  visit_id             Int      @unique
+  visit                AttendanceLog @relation(fields: [visit_id], references: [visit_id], onDelete: Cascade)
+  
+  // Obstetric History
+  gravida              Int?     // Total pregnancies (G)
+  para                 Int?     // Live births (P)
+  gestational_age_weeks Int?    // Weeks pregnant
+  edd                  DateTime? @db.Date // Expected delivery date
+  previous_csection    Boolean  @default(false)
+  
+  // Current Pregnancy Complications
+  hypertension         Boolean  @default(false)
+  gestational_diabetes Boolean  @default(false)
+  multiple_gestation   Boolean  @default(false)
+  preeclampsia_risk    Boolean  @default(false)
+  
+  // Labor Status
+  membranes_ruptured   Boolean  @default(false)
+  rupture_time         DateTime?
+  contraction_frequency String?  @db.VarChar(64) // "Every 2 min"
+  cervical_dilation_cm Int?
+  fetal_heart_rate     Int?
+  fetal_presentation   String?  @db.VarChar(32) // "Cephalic", "Breech", "Transverse"
+  fetal_station        Int?     // -5 to +5
+  
+  // Risk Flags
+  bleeding_severity    String?  @db.VarChar(16) // "None", "Light", "Moderate", "Heavy"
+  fetal_distress       Boolean  @default(false)
+  maternal_distress    Boolean  @default(false)
+  
+  // Management
+  labor_stage          String?  @db.VarChar(16) // "First", "Second", "Third"
+  management_plan      String?  @db.Text
+  
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  
+  delivery             Delivery?
+  partograph_entries   PartographEntry[]
+  
+  @@index([visit_id])
+}
+
+model Delivery {
+  delivery_id          Int      @id @default(autoincrement())
+  obstetric_visit_id   Int      @unique
+  obstetric_visit      ObstetricVisit @relation(fields: [obstetric_visit_id], references: [obstetric_visit_id], onDelete: Cascade)
+  
+  delivery_time        DateTime
+  delivery_type        String   @db.VarChar(32) // "SVD", "Assisted", "Vacuum", "Forceps", "C-Section"
+  conducted_by_user_id Int
+  assisted_by_user_id  Int?
+  
+  // Newborn Data
+  baby_sex             String?  @db.VarChar(16) // "Male", "Female", "Unknown"
+  birth_weight_grams   Int?
+  apgar_1_min          Int?     // 0-10
+  apgar_5_min          Int?     // 0-10
+  cord_ph              Float?
+  resuscitation_needed Boolean  @default(false)
+  resuscitation_details String? @db.Text
+  
+  // Maternal Outcome
+  placenta_delivered   Boolean  @default(false)
+  placenta_delivery_time DateTime?
+  estimated_blood_loss_ml Int?
+  perineal_tear        String?  @db.VarChar(32) // "None", "First degree", "Second degree", etc.
+  complications        String?  @db.Text
+  
+  // Postpartum (initial)
+  postpartum_bp_systolic Int?
+  postpartum_bp_diastolic Int?
+  uterus_firm          Boolean?
+  excessive_bleeding   Boolean  @default(false)
+  
+  notes                String?  @db.Text
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  
+  @@index([obstetric_visit_id])
+  @@index([delivery_time])
+}
+
+model PartographEntry {
+  entry_id             Int      @id @default(autoincrement())
+  obstetric_visit_id   Int
+  obstetric_visit      ObstetricVisit @relation(fields: [obstetric_visit_id], references: [obstetric_visit_id], onDelete: Cascade)
+  
+  recorded_at          DateTime @default(now())
+  recorded_by_user_id  Int
+  hours_in_labor       Float?   // Time since labor started
+  
+  // Maternal Vitals
+  cervical_dilation_cm Int?
+  contractions_per_10min Int?
+  contraction_duration_sec Int?
+  fetal_heart_rate     Int?
+  blood_pressure_systolic Int?
+  blood_pressure_diastolic Int?
+  pulse                Int?
+  temperature          Float?
+  
+  // Interventions
+  fluids_given         String?  @db.VarChar(128)
+  medications_given    String?  @db.Text
+  
+  // Alert flags
+  prolonged_labor_alert Boolean @default(false)
+  fetal_distress_alert Boolean  @default(false)
+  maternal_distress_alert Boolean @default(false)
+  
+  notes                String?  @db.Text
+  
+  @@index([obstetric_visit_id])
+  @@index([recorded_at])
+}
+
+model Task {
+  task_id              Int      @id @default(autoincrement())
+  task_type            String   @db.VarChar(32) // "TRIAGE", "DOCTOR_REVIEW", "DELIVERY", "POSTPARTUM_MONITOR", "BILLING"
+  assigned_role        String   @db.VarChar(32) // "nurse", "doctor", "receptionist"
+  assigned_user_id     Int?
+  
+  visit_id             Int
+  visit                AttendanceLog @relation(fields: [visit_id], references: [visit_id], onDelete: Cascade)
+  
+  status               String   @default("pending") @db.VarChar(16) // "pending", "in_progress", "completed", "cancelled"
+  priority             String   @default("normal") @db.VarChar(16) // "normal", "urgent", "critical"
+  
+  due_at               DateTime?
+  started_at           DateTime?
+  completed_at         DateTime?
+  completed_by_user_id Int?
+  
+  description          String?  @db.Text
+  notes                String?  @db.Text
+  
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  
+  @@index([assigned_role, status])
+  @@index([visit_id])
+  @@index([status])
+  @@index([priority])
 }
