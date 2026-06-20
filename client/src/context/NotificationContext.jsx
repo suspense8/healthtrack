@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 const NotificationContext = createContext(null);
 
-const SOCKET_URL = 'http://localhost:3000';
+import { SOCKET_URL } from '../services/api';
 
 // Request browser notification permission
 const requestNotificationPermission = async () => {

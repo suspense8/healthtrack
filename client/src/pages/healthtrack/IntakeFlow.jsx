@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Button, Container, Heading, Text, VStack, HStack, Input, Select, Checkbox, useToast } from '@chakra-ui/react';
-import axios from 'axios';
+import api from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 
 export default function IntakeFlow() {
@@ -32,7 +32,7 @@ export default function IntakeFlow() {
     }
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:3000/api/community/intake', formData);
+      const res = await api.post('/community/intake', formData);
       toast({ title: 'Report Submitted', description: 'A nurse will review your case.', status: 'success' });
       // In a real app, the SMS link takes them to chat, but we can also redirect them directly for the demo
       window.location.href = res.data.webLink;

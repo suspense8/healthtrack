@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Box, Container, VStack, HStack, Input, IconButton, Text, Heading, Badge, Spinner, Center } from '@chakra-ui/react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
+import api, { SOCKET_URL } from '../../services/api';
 import { io } from 'socket.io-client';
 import { FaPaperPlane } from 'react-icons/fa';
 
@@ -19,7 +19,7 @@ export default function WebConversation() {
     // 1. Fetch initial messages
     const fetchMessages = async () => {
       try {
-        const res = await axios.get(`http://localhost:3000/api/community/messages/${token}`);
+        const res = await api.get(`/community/messages/${token}`);
         setMessages(res.data.messages);
         setCaseInfo(res.data.case);
         setLoading(false);
@@ -31,7 +31,7 @@ export default function WebConversation() {
     fetchMessages();
 
     // 2. Connect Socket.IO
-    const newSocket = io('http://localhost:3000', {
+    const newSocket = io(SOCKET_URL, {
       auth: { token: token, isPatient: true },
       withCredentials: true
     });
@@ -61,7 +61,7 @@ export default function WebConversation() {
     setNewMessage('');
 
     try {
-      await axios.post(`http://localhost:3000/api/community/messages/${token}`, { body });
+      await api.post(`/community/messages/${token}`, { body });
     } catch (err) {
       console.error('Failed to send message');
       // In real app: show error state on message

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, HStack, VStack, Heading, Text, Badge, Button, Input, IconButton, Divider, Spinner, useToast } from '@chakra-ui/react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api, { TOKEN_KEYS } from '../../../services/api';
+import api, { TOKEN_KEYS, SOCKET_URL } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { io } from 'socket.io-client';
 import { FaPaperPlane, FaArrowLeft, FaHospitalUser } from 'react-icons/fa';
@@ -22,7 +22,7 @@ export default function CommunityCaseDetail() {
     fetchCaseData();
 
     const currentToken = localStorage.getItem(TOKEN_KEYS.nurse) || localStorage.getItem(TOKEN_KEYS.admin);
-    const newSocket = io('http://localhost:3000', {
+    const newSocket = io(SOCKET_URL, {
       auth: { token: currentToken },
       withCredentials: true
     });

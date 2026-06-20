@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, Heading, HStack, Spinner, Text, useToast } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import api, { TOKEN_KEYS } from '../../../services/api';
+import api, { TOKEN_KEYS, SOCKET_URL } from '../../../services/api';
 import { io } from 'socket.io-client';
 
 export default function CommunityCaseQueue() {
@@ -17,7 +17,7 @@ export default function CommunityCaseQueue() {
 
     const currentToken = localStorage.getItem(TOKEN_KEYS.nurse) || localStorage.getItem(TOKEN_KEYS.admin);
 
-    const socket = io('http://localhost:3000', {
+    const socket = io(SOCKET_URL, {
       auth: { token: currentToken },
       withCredentials: true
     });

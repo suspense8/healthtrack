@@ -26,8 +26,11 @@ export const clearAllTokens = () => {
   localStorage.removeItem('user'); // Clear legacy user object if any
 };
 
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json'
   }

@@ -25,7 +25,8 @@ import {
 import { FaSearch, FaExternalLinkAlt, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:3000/api';
+import { API_BASE_URL } from '../../../services/api';
+const API_BASE = API_BASE_URL;
 
 const DiseaseSearchModal = ({ isOpen, onClose, onSelectDisease, authToken }) => {
   const [symptoms, setSymptoms] = useState('');
