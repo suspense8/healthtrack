@@ -21,12 +21,26 @@ router.get('/patients/:patientId', nursesController.getPatient);
 router.get('/wards', nursesController.getWards);
 router.post('/wards', nursesController.createWard);
 router.put('/wards/:ward_id', nursesController.updateWard);
+router.patch('/wards/:ward_id/status', nursesController.toggleWardStatus);
+router.put('/wards/:ward_id/bed-count', nursesController.updateBedCount);
+router.delete('/wards/:ward_id', nursesController.deleteWard);
 
 // Bed management
 router.get('/wards/:ward_id/beds', nursesController.getBeds);
 router.post('/wards/:ward_id/beds', nursesController.addBed);
 router.put('/beds/:bed_id', nursesController.updateBed);
 router.delete('/beds/:bed_id', nursesController.deleteBed);
+
+// Emergency Obstetric Workflow
+const obstetricTriageController = require('./obstetricTriage.controller');
+const deliveryController = require('./deliveryRecord.controller');
+
+router.post('/obstetric-triage/:visitId', obstetricTriageController.recordObstetricTriage);
+router.get('/obstetric-pending-review', obstetricTriageController.getObstetricPendingReview);
+router.post('/record-delivery/:visitId', deliveryController.recordDelivery);
+router.get('/delivery/:deliveryId', deliveryController.getDeliveryDetails);
+router.get('/deliveries/today', deliveryController.getTodaysDeliveries);
+router.get('/visit/:visitId', nursesController.getVisit);
 
 module.exports = router;
 

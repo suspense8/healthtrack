@@ -38,11 +38,22 @@ const getQueue = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const { type } = req.query; // 'regular' or 'emergency_obstetric'
+
+    let whereClause = {
+      visit_date: { gte: today },
+      queue_status: 'Ready for Doctor'
+    };
+
+    // Filter by type
+    if (type === 'emergency_obstetric') {
+      whereClause.is_emergency = true;
+    } else if (type === 'regular') {
+      whereClause.is_emergency = false;
+    }
+
     const queue = await prisma.attendanceLog.findMany({
-      where: {
-        visit_date: { gte: today },
-        queue_status: 'Ready for Doctor' // Doctors only see patients ready for them
-      },
+      where: whereClause,
       include: {
         patient: {
           select: {
@@ -54,7 +65,8 @@ const getQueue = async (req, res) => {
             existing_conditions: true,
             allergies: true
           }
-        }
+        },
+        obstetric_visit: true  // Include obstetric data for pregnancy cases
       },
       orderBy: [
         { is_emergency: 'desc' },
@@ -69,25 +81,25 @@ const getQueue = async (req, res) => {
 };
 
 const submitConsultation = async (req, res) => {
-  const { 
-    visit_id, 
-    symptoms, 
-    physical_exam, 
-    diagnosis, 
-    doctor_notes, 
+  const {
+    visit_id,
+    symptoms,
+    physical_exam,
+    diagnosis,
+    doctor_notes,
     prescriptions, // Array of { medication_name, dosage, frequency, duration }
     lab_orders,    // Array of { test_type, urgency }
     disposition,   // 'Admitted', 'Referred', 'Discharged'
     referral_dest,
     admission_notes,
-    follow_up_date 
+    follow_up_date
   } = req.body;
-  
+
   try {
     // 1. Update AttendanceLog with consultation details
     const visit = await prisma.attendanceLog.update({
       where: { visit_id: parseInt(visit_id) },
-      data: { 
+      data: {
         queue_status: disposition === 'Admitted' ? 'Admitted' : 'Pharmacy', // Move to Pharmacy by default, or Admitted
         symptoms,
         physical_exam,
@@ -99,8 +111,8 @@ const submitConsultation = async (req, res) => {
         // If discharged with no meds, maybe 'Completed'? For now 'Pharmacy' is safe if meds exist.
         // If no meds and discharged, we might want 'Completed'.
         // Let's refine:
-        queue_status: (disposition === 'Admitted') ? 'Admitted' : 
-                      (prescriptions && prescriptions.length > 0) ? 'Pharmacy' : 'Completed'
+        queue_status: (disposition === 'Admitted') ? 'Admitted' :
+          (prescriptions && prescriptions.length > 0) ? 'Pharmacy' : 'Completed'
       }
     });
 
@@ -199,7 +211,7 @@ const getPatientHistory = async (req, res) => {
   const { patientId } = req.params;
   try {
     const history = await prisma.attendanceLog.findMany({
-      where: { 
+      where: {
         patient_id: parseInt(patientId)
         // Show all visits, not just completed ones
       },
@@ -256,7 +268,7 @@ const getAppointments = async (req, res) => {
     const appointments = await prisma.appointment.findMany({
       where: {
         status: {
-          in: ['Scheduled', 'Checked In', 'Rescheduled']
+          in: ['Scheduled', 'Checked In', 'Vitals Complete', 'Rescheduled']
         }
       },
       include: {
@@ -380,8 +392,8 @@ const completeAppointment = async (req, res) => {
 
     // If the patient was checked in, there should be an AttendanceLog.
     const today = new Date();
-    today.setHours(0,0,0,0);
-    
+    today.setHours(0, 0, 0, 0);
+
     const visit = await prisma.attendanceLog.findFirst({
       where: {
         appointment_id: parseInt(appointment_id),
@@ -484,7 +496,7 @@ const getPatient = async (req, res) => {
 
 const searchPatients = async (req, res) => {
   const { query, searchType } = req.query;
-  
+
   try {
     let patients = [];
 
@@ -504,7 +516,7 @@ const searchPatients = async (req, res) => {
     } else if (query) {
       // Normalize query to lowercase to match database storage
       const normalizedQuery = query.toLowerCase().trim();
-      
+
       // Fuzzy search on name, id, phone
       patients = await prisma.patient.findMany({
         where: {
@@ -532,11 +544,11 @@ const searchPatients = async (req, res) => {
  */
 const searchDiseases = async (req, res) => {
   const { symptoms, limit = 10 } = req.body;
-  
+
   if (!symptoms || !symptoms.trim()) {
     return res.status(400).json({ error: 'Symptoms description is required' });
   }
-  
+
   try {
     const results = await vectorSearchService.searchDiseases(symptoms, { limit });
     res.json(results);
@@ -552,7 +564,7 @@ const searchDiseases = async (req, res) => {
  */
 const getDiseaseById = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
     const disease = await vectorSearchService.getDiseaseById(id);
     if (!disease) {
@@ -571,13 +583,13 @@ const getDiseaseById = async (req, res) => {
  */
 const autocompleteDiseases = async (req, res) => {
   const { query } = req.query;
-  
+
   if (!query || query.trim().length < 2) {
     return res.json([]);
   }
-  
+
   const searchQuery = query.trim();
-  
+
   try {
     // Fast name-based search with fuzzy matching
     const results = await prisma.$queryRaw`
@@ -605,7 +617,7 @@ const autocompleteDiseases = async (req, res) => {
         similarity(LOWER(name), LOWER(${searchQuery})) DESC
       LIMIT 8
     `;
-    
+
     res.json(results.map(r => ({
       id: r.id,
       name: r.name,
@@ -624,7 +636,7 @@ const autocompleteDiseases = async (req, res) => {
  */
 const searchMedicines = async (req, res) => {
   const { query, limit = 10 } = req.body;
-  
+
   try {
     const results = await vectorSearchService.searchMedicines(query, { limit });
     res.json(results);
@@ -640,7 +652,7 @@ const searchMedicines = async (req, res) => {
  */
 const getMedicineById = async (req, res) => {
   const { id } = req.params;
-  
+
   try {
     const medicine = await vectorSearchService.getMedicineById(id);
     if (!medicine) {
@@ -659,13 +671,13 @@ const getMedicineById = async (req, res) => {
  */
 const autocompleteMedicines = async (req, res) => {
   const { query } = req.query;
-  
+
   if (!query || query.trim().length < 2) {
     return res.json([]);
   }
-  
+
   const searchQuery = query.trim();
-  
+
   try {
     // Fast name-based search with fuzzy matching - includes inventory fields
     const results = await prisma.$queryRaw`
@@ -703,7 +715,7 @@ const autocompleteMedicines = async (req, res) => {
         name ASC
       LIMIT 50
     `;
-    
+
     // Deduplicate medicines by name, keeping only clinically different ones
     const medicineMap = new Map();
     const normalizedResults = results.map(r => ({
@@ -719,7 +731,7 @@ const autocompleteMedicines = async (req, res) => {
       isLowStock: (r.quantity ?? 0) <= (r.reorder_level ?? 10),
       isOutOfStock: (r.quantity ?? 0) === 0
     }));
-    
+
     // Helper function to check if generic name is meaningfully different
     const isGenericNameDifferent = (name1, name2) => {
       if (!name1 || !name2) return false;
@@ -728,17 +740,17 @@ const autocompleteMedicines = async (req, res) => {
       // If generic name is same as brand name, it's not meaningfully different
       return n1 !== n2 && n1.length > 0 && n2.length > 0;
     };
-    
+
     // Helper function to extract strength/form from name
     const extractStrengthForm = (name) => {
       const match = name.match(/(\d+\s*(mg|g|ml|mcg|%|units?))|(tablet|capsule|syrup|injection|cream|ointment|drops?|inhaler|spray)/i);
       return match ? match[0].toLowerCase() : null;
     };
-    
+
     for (const medicine of normalizedResults) {
       const nameKey = medicine.name.toLowerCase();
       const medicineStrengthForm = extractStrengthForm(medicine.name);
-      
+
       // Check if we already have this exact name
       if (!medicineMap.has(nameKey)) {
         // First occurrence of this name
@@ -746,20 +758,20 @@ const autocompleteMedicines = async (req, res) => {
       } else {
         const existing = medicineMap.get(nameKey);
         const existingStrengthForm = extractStrengthForm(existing.name);
-        
+
         // Check if this medicine is clinically different (not just different manufacturer)
-        const isClinicallyDifferent = 
+        const isClinicallyDifferent =
           // Different generic names (and generic name is different from brand name)
           isGenericNameDifferent(medicine.genericName, existing.genericName) ||
           // Different strength/form in the name itself
-          (medicineStrengthForm && existingStrengthForm && 
-           medicineStrengthForm !== existingStrengthForm) ||
+          (medicineStrengthForm && existingStrengthForm &&
+            medicineStrengthForm !== existingStrengthForm) ||
           // One has generic name that's different from brand, other doesn't
-          (medicine.genericName && medicine.genericName.toLowerCase() !== nameKey && 
-           (!existing.genericName || existing.genericName.toLowerCase() === nameKey)) ||
-          (existing.genericName && existing.genericName.toLowerCase() !== nameKey && 
-           (!medicine.genericName || medicine.genericName.toLowerCase() === nameKey));
-        
+          (medicine.genericName && medicine.genericName.toLowerCase() !== nameKey &&
+            (!existing.genericName || existing.genericName.toLowerCase() === nameKey)) ||
+          (existing.genericName && existing.genericName.toLowerCase() !== nameKey &&
+            (!medicine.genericName || medicine.genericName.toLowerCase() === nameKey));
+
         if (isClinicallyDifferent) {
           // Keep both if clinically different
           if (Array.isArray(existing)) {
@@ -780,8 +792,8 @@ const autocompleteMedicines = async (req, res) => {
               medicineMap.set(nameKey, medicine);
             } else if (medicineInfo === existingInfo) {
               // If still equal, prefer the one with generic name (if it's different from brand)
-              if (medicine.genericName && medicine.genericName.toLowerCase() !== nameKey && 
-                  (!existing.genericName || existing.genericName.toLowerCase() === nameKey)) {
+              if (medicine.genericName && medicine.genericName.toLowerCase() !== nameKey &&
+                (!existing.genericName || existing.genericName.toLowerCase() === nameKey)) {
                 medicineMap.set(nameKey, medicine);
               }
             }
@@ -789,7 +801,7 @@ const autocompleteMedicines = async (req, res) => {
         }
       }
     }
-    
+
     // Flatten the results (handle arrays of clinically different medicines)
     const deduplicatedResults = [];
     for (const value of medicineMap.values()) {
@@ -801,10 +813,10 @@ const autocompleteMedicines = async (req, res) => {
         deduplicatedResults.push(value);
       }
     }
-    
+
     // Sort final results by match score and limit to 20
     deduplicatedResults.sort((a, b) => b.matchScore - a.matchScore);
-    
+
     res.json(deduplicatedResults.slice(0, 20));
   } catch (error) {
     console.error('Medicine autocomplete error:', error);

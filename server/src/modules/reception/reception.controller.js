@@ -74,7 +74,7 @@ const createPatient = async (req, res) => {
         created_by: req.user.userId,
       },
     });
-    
+
     // Log the action
     await logAction({
       userId: req.user.userId,
@@ -88,7 +88,7 @@ const createPatient = async (req, res) => {
         is_temp: patient.is_temp_record
       }
     });
-    
+
     res.status(201).json(patient);
   } catch (error) {
     console.error(error);
@@ -101,7 +101,7 @@ const createPatient = async (req, res) => {
 
 const searchPatients = async (req, res) => {
   const { query, searchType } = req.query;
-  
+
   try {
     let patients = [];
 
@@ -121,7 +121,7 @@ const searchPatients = async (req, res) => {
     } else if (query) {
       // Normalize query to lowercase to match database storage
       const normalizedQuery = query.toLowerCase().trim();
-      
+
       // Fuzzy search on name, id, phone
       patients = await prisma.patient.findMany({
         where: {
@@ -148,11 +148,11 @@ const getPatient = async (req, res) => {
   try {
     const patient = await prisma.patient.findUnique({
       where: { patient_id: parseInt(id) },
-      include: { 
-        visits: { 
-          take: 5, 
-          orderBy: { visit_date: 'desc' } 
-        } 
+      include: {
+        visits: {
+          take: 5,
+          orderBy: { visit_date: 'desc' }
+        }
       },
     });
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
@@ -169,7 +169,7 @@ const updatePatient = async (req, res) => {
     const beforePatient = await prisma.patient.findUnique({
       where: { patient_id: parseInt(id) }
     });
-    
+
     // Transform data to lowercase for names, email, address, etc.
     const updateData = { ...req.body };
     if (updateData.first_name) updateData.first_name = updateData.first_name.toLowerCase().trim();
@@ -182,7 +182,7 @@ const updatePatient = async (req, res) => {
     if (updateData.emergency_contact_name) updateData.emergency_contact_name = updateData.emergency_contact_name.toLowerCase().trim();
     if (updateData.phone_number) updateData.phone_number = updateData.phone_number.replace(/\D/g, '');
     if (updateData.emergency_contact_phone) updateData.emergency_contact_phone = updateData.emergency_contact_phone.replace(/\D/g, '');
-    
+
     // Calculate age from DOB if DOB is being updated
     if (updateData.date_of_birth && !updateData.age) {
       const birthDate = new Date(updateData.date_of_birth);
@@ -196,12 +196,12 @@ const updatePatient = async (req, res) => {
         updateData.age = calculatedAge;
       }
     }
-    
+
     const patient = await prisma.patient.update({
       where: { patient_id: parseInt(id) },
       data: updateData,
     });
-    
+
     // Log the action
     await logAction({
       userId: req.user.userId,
@@ -219,7 +219,7 @@ const updatePatient = async (req, res) => {
         email: patient.email
       }
     });
-    
+
     res.json(patient);
   } catch (error) {
     console.error(error);
@@ -233,7 +233,7 @@ const updatePatient = async (req, res) => {
 const verifyPatient = async (req, res) => {
   const { id } = req.params;
   const { phone_number, address, emergency_contact_name, emergency_contact_phone } = req.body;
-  
+
   try {
     const patient = await prisma.patient.update({
       where: { patient_id: parseInt(id) },
@@ -246,7 +246,7 @@ const verifyPatient = async (req, res) => {
         first_visit: false,
       },
     });
-    
+
     // Log the action
     await logAction({
       userId: req.user.userId,
@@ -258,13 +258,15 @@ const verifyPatient = async (req, res) => {
         verification_status: 'verified'
       }
     });
-    
+
     res.json(patient);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Verification failed' });
   }
 };
+
+const visitStateMachine = require('../../services/visitStateMachine');
 
 // --- Check-in & Queue ---
 
@@ -305,17 +307,17 @@ const getAppointmentsForToday = async (req, res) => {
 
 const checkIn = async (req, res) => {
   const { patient_id, visit_reason, is_emergency, visit_type, referred_by, appointment_id } = req.body;
-  
+
   if (!patient_id) {
     return res.status(400).json({ error: 'patient_id is required' });
   }
-  
+
   try {
     // Use transaction to ensure atomic queue number assignment
     const visit = await prisma.$transaction(async (tx) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       // Get today's max queue number with exclusive lock
       const lastVisit = await tx.attendanceLog.findFirst({
         where: {
@@ -325,7 +327,13 @@ const checkIn = async (req, res) => {
       });
 
       const queue_number = (lastVisit?.queue_number || 0) + 1;
-      const queue_status = is_emergency ? 'Emergency' : 'Waiting';
+
+      // Determine initial state via state machine
+      const queue_status = await visitStateMachine.getInitialState(
+        { isEmergency: !!is_emergency, appointmentId: appointment_id },
+        tx
+      );
+
       const now = new Date();
 
       const newVisit = await tx.attendanceLog.create({
@@ -350,14 +358,6 @@ const checkIn = async (req, res) => {
         data: { first_visit: false },
       });
 
-      // If it's an appointment, update its status
-      if (appointment_id) {
-        await tx.appointment.update({
-          where: { appointment_id: parseInt(appointment_id) },
-          data: { status: 'Checked In' }
-        });
-      }
-
       return newVisit;
     });
 
@@ -380,7 +380,7 @@ const checkIn = async (req, res) => {
       where: { patient_id: parseInt(patient_id) },
       select: { first_name: true, last_name: true, patient_id: true }
     });
-    
+
     if (patient) {
       notificationService.notifyPatientQueued(patient, visit.queue_number, visit.is_emergency);
     }
@@ -398,14 +398,19 @@ const checkIn = async (req, res) => {
 const getQueue = async (req, res) => {
   const { status } = req.query;
   const where = {};
-  
+
   if (status) {
+    // If a specific status is requested, use it
     where.queue_status = status;
   } else {
-    // Default: Show everything EXCEPT Completed
-    where.queue_status = { not: 'Completed' };
+    // Default: Show only reception-relevant statuses
+    // These are patients still in the reception/triage workflow
+    // Excludes patients who have moved to doctor, pharmacy, admission, etc.
+    where.queue_status = {
+      in: ['Waiting', 'Emergency', 'In Vitals', 'Vitals Complete']
+    };
   }
-  
+
   // Filter by today
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -416,12 +421,12 @@ const getQueue = async (req, res) => {
       where,
       include: {
         patient: {
-          select: { 
-            first_name: true, 
-            last_name: true, 
+          select: {
+            first_name: true,
+            last_name: true,
             patient_id: true,
             is_temp_record: true,
-            allergies: true 
+            allergies: true
           }
         }
       },
@@ -430,7 +435,14 @@ const getQueue = async (req, res) => {
         { queue_number: 'asc' }
       ]
     });
-    res.json(queue);
+    // Attach a computed position (1-indexed rank in the current active queue).
+    // queue_number reflects arrival order for the day (fixed at check-in);
+    // position reflects where the patient actually stands among those still waiting.
+    const queueWithPosition = queue.map((visit, index) => ({
+      ...visit,
+      position: index + 1,
+    }));
+    res.json(queueWithPosition);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch queue' });
   }
@@ -445,12 +457,12 @@ const updateVisitStatus = async (req, res) => {
     const beforeVisit = await prisma.attendanceLog.findUnique({
       where: { visit_id: parseInt(id) }
     });
-    
+
     const visit = await prisma.attendanceLog.update({
       where: { visit_id: parseInt(id) },
       data: { queue_status },
     });
-    
+
     // Log the action
     await logAction({
       userId: req.user.userId,
@@ -460,7 +472,7 @@ const updateVisitStatus = async (req, res) => {
       beforeSnapshot: beforeVisit ? { queue_status: beforeVisit.queue_status } : null,
       afterSnapshot: { queue_status: visit.queue_status }
     });
-    
+
     res.json(visit);
   } catch (error) {
     console.error(error);
@@ -475,10 +487,10 @@ const updateVisitStatus = async (req, res) => {
 
 const getAttendanceRecords = async (req, res) => {
   const { startDate, endDate, patientName, visitType, isEmergency, queueStatus } = req.query;
-  
+
   try {
     const where = {};
-    
+
     // Date range filter
     if (startDate || endDate) {
       where.visit_date = {};
@@ -493,22 +505,22 @@ const getAttendanceRecords = async (req, res) => {
         where.visit_date.lte = end;
       }
     }
-    
+
     // Visit type filter
     if (visitType && visitType !== 'All') {
       where.visit_type = visitType;
     }
-    
+
     // Emergency filter
     if (isEmergency !== undefined && isEmergency !== 'All') {
       where.is_emergency = isEmergency === 'true';
     }
-    
+
     // Queue status filter
     if (queueStatus && queueStatus !== 'All') {
       where.queue_status = queueStatus;
     }
-    
+
     // Patient name filter (applied after fetch due to relation)
     const records = await prisma.attendanceLog.findMany({
       where,
@@ -528,7 +540,7 @@ const getAttendanceRecords = async (req, res) => {
         { visit_time: 'desc' }
       ]
     });
-    
+
     // Filter by patient name if provided
     let filteredRecords = records;
     if (patientName) {
@@ -538,7 +550,7 @@ const getAttendanceRecords = async (req, res) => {
         return fullName.includes(searchTerm);
       });
     }
-    
+
     res.json(filteredRecords);
   } catch (error) {
     console.error('Error fetching attendance records:', error);
@@ -568,12 +580,12 @@ const syncOfflineActions = async (req, res) => {
             data: { ...patientData, created_by: req.user.userId }
           });
         }
-        
+
         results.push({ tempId: action.tempId, status: 'SUCCESS', realId: patient.patient_id });
-      
+
       } else if (action.type === 'CHECK_IN') {
         const { patient_id, ...rest } = action.payload;
-        
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const lastVisit = await prisma.attendanceLog.findFirst({

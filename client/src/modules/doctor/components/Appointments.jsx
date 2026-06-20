@@ -48,7 +48,7 @@ export default function Appointments() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const apptDay = new Date(apptDate.getFullYear(), apptDate.getMonth(), apptDate.getDate());
-    
+
     // Due if it's today OR in the past
     return apptDay.getTime() === today.getTime() || apptDate < now;
   };
@@ -58,8 +58,8 @@ export default function Appointments() {
 
   if (selectedAppointment) {
     return (
-      <FollowUpView 
-        appointment={selectedAppointment} 
+      <FollowUpView
+        appointment={selectedAppointment}
         onBack={() => setSelectedAppointment(null)}
         onComplete={() => {
           setSelectedAppointment(null);
@@ -93,11 +93,13 @@ export default function Appointments() {
           </Thead>
           <Tbody>
             {dueAppointments.map((appt) => {
-              const isReady = appt.status === 'Checked In';
+              const isReady = appt.status === 'Checked In' || appt.status === 'Vitals Complete';
+              const hasVitals = appt.status === 'Vitals Complete';
+
               return (
-                <Tr 
-                  key={appt.appointment_id} 
-                  _hover={isReady ? { bg: 'green.50', cursor: 'pointer' } : { bg: 'gray.50', cursor: 'not-allowed' }} 
+                <Tr
+                  key={appt.appointment_id}
+                  _hover={isReady ? { bg: 'green.50', cursor: 'pointer' } : { bg: 'gray.50', cursor: 'not-allowed' }}
                   onClick={() => isReady && setSelectedAppointment(appt)}
                   opacity={isReady ? 1 : 0.7}
                 >
@@ -105,14 +107,18 @@ export default function Appointments() {
                   <Td>{appt.patient.first_name} {appt.patient.last_name}</Td>
                   <Td>{appt.reason}</Td>
                   <Td>
-                    <Badge colorScheme={isReady ? 'green' : 'orange'}>
-                      {isReady ? 'Ready' : 'Waiting'}
-                    </Badge>
+                    {hasVitals ? (
+                      <Badge colorScheme="green">Vitals Done ✓</Badge>
+                    ) : (
+                      <Badge colorScheme={isReady ? 'green' : 'orange'}>
+                        {isReady ? 'Ready' : 'Waiting'}
+                      </Badge>
+                    )}
                   </Td>
                   <Td>
-                    <Button 
-                      size="sm" 
-                      colorScheme={isReady ? 'green' : 'gray'} 
+                    <Button
+                      size="sm"
+                      colorScheme={isReady ? 'green' : 'gray'}
                       isDisabled={!isReady}
                       onClick={(e) => {
                         e.stopPropagation();

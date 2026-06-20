@@ -34,6 +34,7 @@ export const NotificationProvider = ({ children }) => {
   const toast = useToast();
   const navigateRef = useRef(null);
   const setTabRef = useRef(null);
+  const socketRef = useRef(null);
 
   // Request permission on mount
   useEffect(() => {
@@ -81,10 +82,13 @@ export const NotificationProvider = ({ children }) => {
     }
 
     // Disconnect existing socket if any
-    if (socket) {
-      socket.disconnect();
+    if (socketRef.current) {
+      console.log('🔌 Disconnecting previous socket');
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
 
+    console.log('🔌 Creating new socket connection');
     const newSocket = io(SOCKET_URL, {
       auth: { token },
       transports: ['websocket', 'polling']
@@ -108,8 +112,16 @@ export const NotificationProvider = ({ children }) => {
     newSocket.on('notification', (notification) => {
       console.log('📨 Received notification:', notification);
       
-      // Add to notifications list
-      setNotifications(prev => [notification, ...prev].slice(0, 50));
+      // Add to notifications list (deduplicate by ID)
+      setNotifications(prev => {
+        // Check if notification with this ID already exists
+        const exists = prev.some(n => n.id === notification.id);
+        if (exists) {
+          console.log('⚠️ Duplicate notification ignored:', notification.id);
+          return prev; // Don't add duplicate
+        }
+        return [notification, ...prev].slice(0, 50);
+      });
       
       // Show browser notification (faster than toast)
       showBrowserNotification(notification);
@@ -132,17 +144,20 @@ export const NotificationProvider = ({ children }) => {
       newSocket.emit('notification_received', notification.id);
     });
 
+    socketRef.current = newSocket;
     setSocket(newSocket);
-  }, [socket, toast, showBrowserNotification]);
+  }, [toast, showBrowserNotification]);
 
   // Disconnect
   const disconnect = useCallback(() => {
-    if (socket) {
-      socket.disconnect();
+    if (socketRef.current) {
+      console.log('🔌 Disconnecting socket');
+      socketRef.current.disconnect();
+      socketRef.current = null;
       setSocket(null);
       setIsConnected(false);
     }
-  }, [socket]);
+  }, []);
 
   // Clear notifications
   const clearNotifications = useCallback(() => {
@@ -181,11 +196,13 @@ export const NotificationProvider = ({ children }) => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (socket) {
-        socket.disconnect();
+      if (socketRef.current) {
+        console.log('🔌 Cleaning up socket on unmount');
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
-  }, [socket]);
+  }, []);
 
   return (
     <NotificationContext.Provider value={{

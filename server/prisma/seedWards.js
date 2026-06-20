@@ -9,6 +9,7 @@ async function seedWardsAndBeds() {
     { ward_name: 'Female Ward', ward_type: 'General', total_beds: 10, description: 'General female patients' },
     { ward_name: 'Children Ward', ward_type: 'Pediatric', total_beds: 8, description: 'Pediatric patients' },
     { ward_name: 'Antenatal Ward', ward_type: 'Maternity', total_beds: 6, description: 'Pregnant women before delivery' },
+    { ward_name: 'Labor/Delivery Suite', ward_type: 'Maternity', total_beds: 4, description: 'Active labor and delivery' },
     { ward_name: 'Postnatal Ward', ward_type: 'Maternity', total_beds: 6, description: 'Mothers after delivery' },
     { ward_name: 'Emergency Ward', ward_type: 'Emergency', total_beds: 4, description: 'Critical and emergency cases' },
   ];

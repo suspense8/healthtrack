@@ -1,14 +1,17 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const TaskManager = require('../services/taskManager');
-const { logAction } = require('../utils/auditLogger');
 
 /**
- * Register Emergency Obstetric Patient
+ * Register Emergency Patient (any type)
  * POST /api/reception/register-emergency-obstetric
  */
 const registerEmergencyObstetric = async (req, res) => {
-  const { patient_id, patient_data, obstetric_data, complaint } = req.body;
+  const { patient_id, patient_data, obstetric_data, complaint, emergency_type } = req.body;
+
+  // Default to 'Labor' for backwards compatibility
+  const subtype = emergency_type || 'Labor';
+  const isLabor = subtype === 'Labor';
 
   try {
     let patientId = patient_id;
@@ -45,13 +48,13 @@ const registerEmergencyObstetric = async (req, res) => {
       }
     });
 
-    // Create visit with emergency obstetric classification
+    // Create visit with emergency classification
     const visit = await prisma.attendanceLog.create({
       data: {
         patient_id: patientId,
-        visit_reason: complaint || 'Emergency labor',
+        visit_reason: complaint || `Emergency ${subtype}`,
         is_emergency: true,
-        emergency_subtype: 'Labor',
+        emergency_subtype: subtype,
         visit_type: 'Walk-in',
         queue_number: queueCount + 1,
         queue_status: 'Waiting',
@@ -60,68 +63,83 @@ const registerEmergencyObstetric = async (req, res) => {
       }
     });
 
-    // Create obstetric visit record
-    const obstetricVisit = await prisma.obstetricVisit.create({
-      data: {
-        visit_id: visit.visit_id,
-        gravida: obstetric_data?.gravida,
-        para: obstetric_data?.para,
-        gestational_age_weeks: obstetric_data?.gestational_age_weeks,
-        previous_csection: obstetric_data?.previous_csection || false,
-        edd: obstetric_data?.edd ? new Date(obstetric_data.edd) : null
-      }
-    });
+    // Create obstetric visit record only for Labor
+    let obstetricVisit = null;
+    if (isLabor && obstetric_data) {
+      obstetricVisit = await prisma.obstetricVisit.create({
+        data: {
+          visit_id: visit.visit_id,
+          gravida: obstetric_data?.gravida,
+          para: obstetric_data?.para,
+          gestational_age_weeks: obstetric_data?.gestational_age_weeks,
+          previous_csection: obstetric_data?.previous_csection || false,
+          edd: obstetric_data?.edd ? new Date(obstetric_data.edd) : null
+        }
+      });
+    }
 
     // Auto-create triage task for nurse
     const task = await TaskManager.createTriageTask(visit.visit_id, 'critical');
 
-    // Log action
-    await logAction({
-      userId: req.user.userId,
-      action: 'REGISTER_EMERGENCY_OBSTETRIC',
-      entity: 'Visit',
-      entityId: visit.visit_id,
-      afterSnapshot: { patient_id: patientId, visit_id: visit.visit_id }
-    });
-
     // Emit socket notification to nurses
     const io = req.app.get('io');
     if (io) {
-      io.to('nurse').emit('emergency:obstetric:triage_needed', {
-        visitId: visit.visit_id,
-        patientId,
-        queueNumber: visit.queue_number,
-        complaint,
-        gestationalAge: obstetric_data?.gestational_age_weeks,
-        taskId: task.task_id
-      });
+      if (isLabor) {
+        io.to('nurse').emit('emergency:obstetric:triage_needed', {
+          visitId: visit.visit_id,
+          patientId,
+          queueNumber: visit.queue_number,
+          complaint,
+          gestationalAge: obstetric_data?.gestational_age_weeks,
+          taskId: task.task_id
+        });
+      } else {
+        io.to('nurse').emit('emergency:triage_needed', {
+          visitId: visit.visit_id,
+          patientId,
+          queueNumber: visit.queue_number,
+          emergencyType: subtype,
+          complaint,
+          taskId: task.task_id
+        });
+      }
     }
 
     res.status(201).json({
-      message: 'Emergency obstetric patient registered',
+      message: `Emergency patient registered (${subtype})`,
       visit_id: visit.visit_id,
-      obstetric_visit_id: obstetricVisit.obstetric_visit_id,
+      obstetric_visit_id: obstetricVisit?.obstetric_visit_id || null,
       queue_number: visit.queue_number,
-      task_id: task.task_id
+      task_id: task.task_id,
+      emergency_type: subtype
     });
 
   } catch (error) {
-    console.error('Emergency obstetric registration error:', error);
-    res.status(500).json({ error: 'Failed to register emergency obstetric patient' });
+    console.error('Emergency registration error:', error);
+    res.status(500).json({ error: 'Failed to register emergency patient' });
   }
 };
 
 /**
- * Get emergency obstetric visits pending triage
- * GET /api/reception/emergency-obstetric-queue
+ * Get all emergency visits pending triage
+ * GET /api/reception/emergency-obstetric-queue?type=Labor
  */
 const getEmergencyObstetricQueue = async (req, res) => {
   try {
+    const { type } = req.query;
+
+    const whereClause = {
+      is_emergency: true,
+      queue_status: { in: ['Waiting', 'In Progress'] }
+    };
+
+    // Optionally filter by a specific emergency subtype
+    if (type) {
+      whereClause.emergency_subtype = type;
+    }
+
     const visits = await prisma.attendanceLog.findMany({
-      where: {
-        emergency_subtype: 'Labor',
-        queue_status: { in: ['Waiting', 'In Progress'] }
-      },
+      where: whereClause,
       include: {
         patient: {
           select: {
@@ -138,7 +156,7 @@ const getEmergencyObstetricQueue = async (req, res) => {
 
     res.json(visits);
   } catch (error) {
-    console.error('Error fetching emergency obstetric queue:', error);
+    console.error('Error fetching emergency queue:', error);
     res.status(500).json({ error: 'Failed to fetch queue' });
   }
 };

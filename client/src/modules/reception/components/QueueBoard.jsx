@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { 
-  Box, Table, Thead, Tbody, Tr, Th, Td, Badge, Heading, 
+import {
+  Box, Table, Thead, Tbody, Tr, Th, Td, Badge, Heading,
   Button, HStack, IconButton, useToast, Menu, MenuButton, MenuList, MenuItem
 } from '@chakra-ui/react';
 import { ChevronDownIcon } from '@chakra-ui/icons';
@@ -44,9 +44,11 @@ export default function QueueBoard() {
   };
 
   const getStatusColor = (status) => {
-    switch(status) {
+    switch (status) {
       case 'Waiting': return 'yellow';
       case 'waiting_for_vitals': return 'blue';
+      case 'In Vitals': return 'blue';
+      case 'Vitals Complete': return 'cyan';
       case 'In Progress': return 'green';
       case 'Emergency': return 'red';
       case 'abandoned': return 'gray';
@@ -60,12 +62,12 @@ export default function QueueBoard() {
         <Heading size="md">Current Queue</Heading>
         <Button size="sm" onClick={fetchQueue} isLoading={loading}>Refresh</Button>
       </HStack>
-      
+
       <Box overflowX="auto">
         <Table variant="simple">
           <Thead>
             <Tr>
-              <Th>Queue #</Th>
+              <Th>Position</Th>
               <Th>Patient</Th>
               <Th>Status</Th>
               <Th>Type</Th>
@@ -75,15 +77,18 @@ export default function QueueBoard() {
           </Thead>
           <Tbody>
             {(queue.map((visit) => (
-              <Tr 
-                key={visit.visit_id} 
+              <Tr
+                key={visit.visit_id}
                 bg={visit.is_emergency ? 'red.100' : 'white'}
                 borderLeft={visit.is_emergency ? '4px solid' : 'none'}
                 borderLeftColor="red.500"
               >
                 <Td fontWeight="bold">
                   {visit.is_emergency && <Badge colorScheme="red" mr={2}>🚨</Badge>}
-                  #{visit.queue_number}
+                  #{visit.position}
+                  <Box as="span" fontSize="xs" color="gray.400" ml={1} fontWeight="normal">
+                    (arrival #{visit.queue_number})
+                  </Box>
                 </Td>
                 <Td>
                   {visit.patient.first_name} {visit.patient.last_name}

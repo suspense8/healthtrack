@@ -33,11 +33,16 @@ model Patient {
   date_registered         DateTime  @default(now())
   created_by              Int?
   updated_at              DateTime  @default(now()) @updatedAt
+  preferred_language      String?   @db.VarChar(32)
+  channel_preference      String?   @db.VarChar(32)
 
-  appointments  Appointment[]
-  visits        AttendanceLog[]
-  lab_orders    LabOrder[]
-  prescriptions Prescription[]
+  appointments     Appointment[]
+  visits           AttendanceLog[]
+  lab_orders       LabOrder[]
+  prescriptions    Prescription[]
+  community_cases  CommunityCase[]
+  messages         Message[]
+  magic_links      MagicLinkToken[]
 
   @@index([first_name, last_name])
   @@index([phone_number])
@@ -115,6 +120,11 @@ model AttendanceLog {
   
   // Emergency classification
   emergency_subtype String? @db.VarChar(32) // "Labor", "Bleeding", "Trauma", "Respiratory", etc.
+
+  // Community Channel
+  channel           String? @default("in_person") @db.VarChar(32)
+  community_case_id Int?
+  community_case    CommunityCase? @relation(fields: [community_case_id], references: [id], onDelete: SetNull)
 }
 
 model LabOrder {
@@ -176,6 +186,9 @@ model User {
   role          String   @default("receptionist") @db.VarChar(20)
   created_at    DateTime @default(now())
   updated_at    DateTime @default(now()) @updatedAt
+
+  community_cases CommunityCase[]
+  messages        Message[]
 }
 
 // ============== ADMISSION SYSTEM ==============
@@ -212,7 +225,7 @@ model Admission {
   admission_id     Int       @id @default(autoincrement())
   patient_id       Int
   visit_id         Int
-  ward_id          Int
+  ward_id          Int?
   bed_id           Int?
   admission_status String    @default("Pending") @db.VarChar(32)
   priority         String    @default("Normal") @db.VarChar(16)
@@ -230,7 +243,7 @@ model Admission {
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
-  ward  Ward  @relation(fields: [ward_id], references: [ward_id], onDelete: Cascade)
+  ward  Ward?  @relation(fields: [ward_id], references: [ward_id], onDelete: Cascade)
   bed   Bed?  @relation(fields: [bed_id], references: [bed_id], onDelete: SetNull)
   notes AdmissionNote[]
 
@@ -459,4 +472,73 @@ model Task {
   @@index([visit_id])
   @@index([status])
   @@index([priority])
+}
+
+// ============== COMMUNITY SYSTEM ==============
+
+model CommunityCase {
+  id                 Int      @id @default(autoincrement())
+  reference_number   String   @unique @db.VarChar(64)
+  patient_id         Int
+  phone_e164         String   @db.VarChar(32)
+  area               String   @db.VarChar(128)
+  symptom            String   @db.VarChar(255)
+  additional_symptoms String? @db.Text
+  duration           String?  @db.VarChar(64)
+  severity_suggested String   @db.VarChar(16) // low, medium, high, urgent
+  severity_triage    String?  @db.VarChar(16) // red, yellow, green
+  status             String   @default("new") @db.VarChar(32) // new, claimed, resolved, promoted, referred
+  channel            String   @db.VarChar(32) // simulated_phone, ussd, web
+  language           String   @default("en") @db.VarChar(16)
+  consent_sms        Boolean  @default(false)
+  opted_out          Boolean  @default(false)
+  assigned_nurse_id  Int?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  patient            Patient          @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+  assigned_nurse     User?            @relation(fields: [assigned_nurse_id], references: [user_id], onDelete: SetNull)
+  attendance_logs    AttendanceLog[]
+  messages           Message[]
+  magic_link_tokens  MagicLinkToken[]
+
+  @@index([patient_id])
+  @@index([status])
+  @@index([assigned_nurse_id])
+}
+
+model Message {
+  id                 Int      @id @default(autoincrement())
+  community_case_id  Int
+  patient_id         Int
+  sender_type        String   @db.VarChar(32) // patient, nurse, system
+  sender_user_id     Int?
+  channel            String   @db.VarChar(32) // sms, web, system
+  direction          String   @db.VarChar(16) // inbound, outbound
+  body               String   @db.Text
+  twilio_sid         String?  @db.VarChar(64) @unique
+  delivery_status    String?  @db.VarChar(32) // queued, sent, delivered, failed
+  created_at         DateTime @default(now())
+
+  community_case     CommunityCase @relation(fields: [community_case_id], references: [id], onDelete: Cascade)
+  patient            Patient       @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+  sender_user        User?         @relation(fields: [sender_user_id], references: [user_id], onDelete: SetNull)
+
+  @@index([community_case_id])
+  @@index([twilio_sid])
+}
+
+model MagicLinkToken {
+  id                 Int      @id @default(autoincrement())
+  token_hash         String   @unique @db.VarChar(255)
+  community_case_id  Int
+  patient_id         Int
+  expires_at         DateTime
+  revoked_at         DateTime?
+  created_at         DateTime @default(now())
+
+  community_case     CommunityCase @relation(fields: [community_case_id], references: [id], onDelete: Cascade)
+  patient            Patient       @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@index([token_hash])
 }

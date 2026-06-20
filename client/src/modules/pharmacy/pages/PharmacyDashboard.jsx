@@ -20,15 +20,15 @@ export default function PharmacyDashboard() {
   const { tab } = useParams();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
-  
+
   // Default to 'queue' if no tab specified
   const activeTab = tab || 'queue';
-  
+
   // Navigate to tab
   const setActiveTab = (newTab) => {
     navigate(`/pharmacy/${newTab}`);
   };
-  
+
   // Redirect to default if invalid tab
   useEffect(() => {
     const validTabs = ['queue', 'inventory', 'history'];
@@ -55,12 +55,12 @@ export default function PharmacyDashboard() {
   };
 
   const StatCard = ({ icon, label, value, color }) => (
-    <Stat 
-      p={5} 
-      bg="white" 
-      borderRadius="lg" 
-      boxShadow="sm" 
-      borderLeft="4px solid" 
+    <Stat
+      p={5}
+      bg="white"
+      borderRadius="lg"
+      boxShadow="sm"
+      borderLeft="4px solid"
       borderColor={`${color}.500`}
     >
       <HStack>

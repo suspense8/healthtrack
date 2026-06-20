@@ -1,13 +1,14 @@
 const prisma = require('../../config/database');
 const notificationService = require('../../services/notification.service');
+const visitStateMachine = require('../../services/visitStateMachine');
 
 const getQueue = async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const { status } = req.query;
-    
+
     let statusFilter = {};
     if (status === 'active') {
       statusFilter = { in: ['Waiting', 'waiting_for_vitals', 'Emergency'] };
@@ -29,14 +30,21 @@ const getQueue = async (req, res) => {
             gender: true,
             date_of_birth: true,
           }
-        }
+        },
+        obstetric_visit: true
       },
       orderBy: [
         { is_emergency: 'desc' },
         { queue_number: 'asc' }
       ]
     });
-    res.json(queue);
+    // Attach computed position (1-indexed rank among currently-active patients).
+    // queue_number is the immutable arrival order assigned at check-in.
+    const queueWithPosition = queue.map((visit, index) => ({
+      ...visit,
+      position: index + 1,
+    }));
+    res.json(queueWithPosition);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch nurse queue' });
@@ -44,58 +52,64 @@ const getQueue = async (req, res) => {
 };
 
 const getVisit = async (req, res) => {
-  const { visitId } = req.params;
+  const { visitId, id } = req.params;
+  const visitIdParam = visitId || id;
   try {
     const visit = await prisma.attendanceLog.findUnique({
-      where: { visit_id: parseInt(visitId) },
+      where: { visit_id: parseInt(visitIdParam) },
       include: {
-        patient: {
-          select: {
-            patient_id: true,
-            first_name: true,
-            last_name: true,
-            date_of_birth: true,
-            gender: true,
-            national_id: true,
-            allergies: true,
-            existing_conditions: true
-          }
-        }
+        patient: true
       }
     });
+
     if (!visit) {
       return res.status(404).json({ error: 'Visit not found' });
     }
-    res.json(visit);
+
+    // Only get last 3 visits to keep payload small
+    const patientHistory = await prisma.attendanceLog.findMany({
+      where: {
+        patient_id: visit.patient_id,
+        visit_id: { not: parseInt(visitIdParam) }
+      },
+      orderBy: { visit_date: 'desc' },
+      take: 3
+    });
+
+    res.json({ ...visit, patientHistory });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: 'Failed to fetch visit' });
   }
 };
 
 const updateVitals = async (req, res) => {
-  const { 
-    visit_id, 
-    systolic_bp, diastolic_bp, heart_rate, respiratory_rate, 
+  const {
+    visit_id,
+    systolic_bp, diastolic_bp, heart_rate, respiratory_rate,
     temperature, oxygen_saturation, weight, height,
     triage_level, nurse_notes, next_step
   } = req.body;
 
   try {
-    let newStatus = 'Ready for Doctor'; // Default
+    // 1. First get the visit to pass to state machine
+    let visit = await prisma.attendanceLog.findUnique({
+      where: { visit_id: parseInt(visit_id) }
+    });
 
-    // Determine status based on next_step or triage
-    if (next_step === 'discharge') {
-      newStatus = 'Completed';
-    } else if (next_step === 'treat_by_nurse') {
-      newStatus = 'In Progress';
-    } else if (triage_level === 'Red') {
-      newStatus = 'Emergency';
+    if (!visit) {
+      return res.status(404).json({ error: 'Visit not found' });
     }
 
-    const visit = await prisma.attendanceLog.update({
+    // 2. Use state machine to determine new status and handle side-effects
+    const newStatus = await visitStateMachine.afterNurseTriage(visit, {
+      nextStep: next_step,
+      triageLevel: triage_level
+    });
+
+    // 3. Update the visit
+    visit = await prisma.attendanceLog.update({
       where: { visit_id: parseInt(visit_id) },
-      data: { 
+      data: {
         systolic_bp: parseInt(systolic_bp) || null,
         diastolic_bp: parseInt(diastolic_bp) || null,
         heart_rate: parseInt(heart_rate) || null,
@@ -134,9 +148,11 @@ const updateVitals = async (req, res) => {
  * Get all wards with bed counts
  */
 const getWards = async (req, res) => {
+  const { includeInactive } = req.query;
+
   try {
     const wards = await prisma.ward.findMany({
-      where: { is_active: true },
+      where: includeInactive === 'true' ? {} : { is_active: true },
       include: {
         beds: true,
         _count: {
@@ -320,6 +336,134 @@ const deleteBed = async (req, res) => {
   }
 };
 
+/**
+ * Toggle ward active status
+ */
+const toggleWardStatus = async (req, res) => {
+  const { ward_id } = req.params;
+  const { is_active } = req.body;
+
+  try {
+    const ward = await prisma.ward.update({
+      where: { ward_id: parseInt(ward_id) },
+      data: { is_active }
+    });
+    res.json(ward);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update ward status' });
+  }
+};
+
+/**
+ * Update bed count for a ward (add or remove beds)
+ */
+const updateBedCount = async (req, res) => {
+  const { ward_id } = req.params;
+  const { new_bed_count } = req.body;
+
+  try {
+    const ward = await prisma.ward.findUnique({
+      where: { ward_id: parseInt(ward_id) },
+      include: { beds: true }
+    });
+
+    if (!ward) {
+      return res.status(404).json({ error: 'Ward not found' });
+    }
+
+    const currentBedCount = ward.beds.length;
+    const newCount = parseInt(new_bed_count);
+
+    if (newCount < currentBedCount) {
+      // Remove beds (only if they're available)
+      const bedsToRemove = currentBedCount - newCount;
+      const availableBeds = ward.beds.filter(b => b.status === 'Available');
+
+      if (availableBeds.length < bedsToRemove) {
+        return res.status(400).json({
+          error: 'Cannot remove occupied beds. Free up beds first.'
+        });
+      }
+
+      // Delete the last N available beds
+      for (let i = 0; i < bedsToRemove; i++) {
+        await prisma.bed.delete({
+          where: { bed_id: availableBeds[i].bed_id }
+        });
+      }
+    } else if (newCount > currentBedCount) {
+      // Add new beds
+      const bedsToAdd = newCount - currentBedCount;
+      const wardInitial = ward.ward_name.charAt(0);
+
+      for (let i = 1; i <= bedsToAdd; i++) {
+        const newBedNumber = currentBedCount + i;
+        const bedNumber = `${wardInitial}${newBedNumber}`;
+
+        await prisma.bed.create({
+          data: {
+            ward_id: ward.ward_id,
+            bed_number: bedNumber,
+            status: 'Available'
+          }
+        });
+      }
+    }
+
+    // Update total_beds count
+    const updatedWard = await prisma.ward.update({
+      where: { ward_id: parseInt(ward_id) },
+      data: { total_beds: newCount },
+      include: { beds: true }
+    });
+
+    res.json(updatedWard);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update bed count' });
+  }
+};
+
+/**
+ * Delete a ward (only if no active admissions)
+ */
+const deleteWard = async (req, res) => {
+  const { ward_id } = req.params;
+
+  try {
+    // Check for active admissions
+    const activeAdmissions = await prisma.admission.count({
+      where: {
+        ward_id: parseInt(ward_id),
+        admission_status: 'Admitted'
+      }
+    });
+
+    if (activeAdmissions > 0) {
+      return res.status(400).json({
+        error: `Cannot delete ward with ${activeAdmissions} active admission(s). Discharge or transfer patients first.`
+      });
+    }
+
+    // Delete all beds first (cascade)
+    await prisma.bed.deleteMany({
+      where: { ward_id: parseInt(ward_id) }
+    });
+
+    // Delete the ward
+    await prisma.ward.delete({
+      where: { ward_id: parseInt(ward_id) }
+    });
+
+    res.json({ message: 'Ward deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete ward' });
+  }
+};
+
+
 const getPatient = async (req, res) => {
   const { patientId } = req.params;
   try {
@@ -351,7 +495,7 @@ const getPatient = async (req, res) => {
 
 const searchPatients = async (req, res) => {
   const { query, searchType } = req.query;
-  
+
   try {
     let patients = [];
 
@@ -371,7 +515,7 @@ const searchPatients = async (req, res) => {
     } else if (query) {
       // Normalize query to lowercase to match database storage
       const normalizedQuery = query.toLowerCase().trim();
-      
+
       // Fuzzy search on name, id, phone
       patients = await prisma.patient.findMany({
         where: {
@@ -397,7 +541,7 @@ const getPatientHistory = async (req, res) => {
   const { patientId } = req.params;
   try {
     const history = await prisma.attendanceLog.findMany({
-      where: { 
+      where: {
         patient_id: parseInt(patientId)
         // Show all visits, not just completed ones
       },
@@ -457,6 +601,9 @@ module.exports = {
   getWards,
   createWard,
   updateWard,
+  toggleWardStatus,
+  updateBedCount,
+  deleteWard,
   getBeds,
   addBed,
   updateBed,

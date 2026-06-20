@@ -30,5 +30,12 @@ router.post('/search-medicines', doctorController.searchMedicines);
 router.get('/medicines/autocomplete', doctorController.autocompleteMedicines);
 router.get('/medicines/:id', doctorController.getMedicineById);
 
+// Emergency Obstetric Workflow
+const obstetricReviewController = require('./obstetricReview.controller');
+
+router.post('/obstetric-review/:visitId', obstetricReviewController.obstetricReview);
+router.post('/partograph/:visitId', obstetricReviewController.addPartographEntry);
+router.get('/partograph/:visitId', obstetricReviewController.getPartographData);
+
 module.exports = router;
 

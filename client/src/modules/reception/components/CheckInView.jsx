@@ -16,6 +16,8 @@ export default function CheckInView() {
   const [patient, setPatient] = useState(null);
   const [visitReason, setVisitReason] = useState('');
   const [visitType, setVisitType] = useState('Walk-in');
+  const [appointments, setAppointments] = useState([]);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState('');
   const [isEmergency, setIsEmergency] = useState(false);
   const [referredBy, setReferredBy] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,19 +26,31 @@ export default function CheckInView() {
   const { addOfflineAction, isOnline } = useOffline();
 
   useEffect(() => {
-    const fetchPatient = async () => {
+    const fetchPatientData = async () => {
       try {
-        const res = await api.get(`/reception/patients/${patientId}`);
-        setPatient(res.data);
+        const [patientRes, apptRes] = await Promise.all([
+          api.get(`/reception/patients/${patientId}`),
+          api.get(`/reception/appointments/today`)
+        ]);
+        setPatient(patientRes.data);
+
+        // Filter appointments for this specific patient
+        const patientAppointments = apptRes.data.filter(
+          appt => appt.patient_id === parseInt(patientId)
+        );
+        setAppointments(patientAppointments);
+        if (patientAppointments.length > 0) {
+          setSelectedAppointmentId(patientAppointments[0].appointment_id);
+        }
       } catch (error) {
-        toast({ title: 'Failed to load patient', status: 'error' });
+        toast({ title: 'Failed to load patient data', status: 'error' });
         navigate('/reception/search');
       } finally {
         setFetching(false);
       }
     };
     if (patientId) {
-      fetchPatient();
+      fetchPatientData();
     }
   }, [patientId, navigate, toast]);
 
@@ -47,15 +61,16 @@ export default function CheckInView() {
       visit_reason: visitReason,
       visit_type: visitType,
       is_emergency: isEmergency,
-      referred_by: referredBy || null
+      referred_by: referredBy || null,
+      appointment_id: visitType === 'Follow-up' && selectedAppointmentId ? selectedAppointmentId : null
     };
 
     try {
       const res = await api.post('/reception/checkin', payload);
-      toast({ 
-        title: 'Check-in successful', 
+      toast({
+        title: 'Check-in successful',
         description: `Queue Number: ${res.data.queue_number}`,
-        status: 'success' 
+        status: 'success'
       });
       navigate('/reception/queue');
     } catch (error) {
@@ -100,37 +115,55 @@ export default function CheckInView() {
             <FormLabel>Visit Type</FormLabel>
             <Select value={visitType} onChange={(e) => setVisitType(e.target.value)}>
               <option value="Walk-in">Walk-in</option>
-              <option value="Appointment">Appointment</option>
+              {appointments.length > 0 && <option value="Follow-up">Follow-up (Scheduled)</option>}
+              <option value="Appointment">Other Appointment</option>
             </Select>
           </FormControl>
+
+          {visitType === 'Follow-up' && appointments.length > 0 && (
+            <FormControl>
+              <FormLabel>Select Appointment</FormLabel>
+              <Select
+                value={selectedAppointmentId}
+                onChange={(e) => setSelectedAppointmentId(e.target.value)}
+              >
+                {appointments.map(appt => (
+                  <option key={appt.appointment_id} value={appt.appointment_id}>
+                    {new Date(appt.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {appt.reason}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
           <FormControl isRequired>
             <FormLabel>Reason for Visit</FormLabel>
-            <Textarea 
-              placeholder="e.g. Fever, Headache, Checkup" 
-              value={visitReason} 
-              onChange={(e) => setVisitReason(e.target.value)} 
+            <Textarea
+              placeholder="e.g. Fever, Headache, Checkup"
+              value={visitReason}
+              onChange={(e) => setVisitReason(e.target.value)}
             />
           </FormControl>
           <FormControl>
             <FormLabel>Referred By (Optional)</FormLabel>
-            <Input 
+            <Input
               placeholder="e.g. Dr. Smith, Clinic Name"
-              value={referredBy} 
-              onChange={(e) => setReferredBy(e.target.value)} 
+              value={referredBy}
+              onChange={(e) => setReferredBy(e.target.value)}
             />
           </FormControl>
           <FormControl display="flex" alignItems="center">
             <FormLabel htmlFor="emergency-switch" mb="0">
               Is Emergency?
             </FormLabel>
-            <Switch 
-              id="emergency-switch" 
-              colorScheme="red" 
-              isChecked={isEmergency} 
-              onChange={(e) => setIsEmergency(e.target.checked)} 
+            <Switch
+              id="emergency-switch"
+              colorScheme="red"
+              isChecked={isEmergency}
+              onChange={(e) => setIsEmergency(e.target.checked)}
             />
           </FormControl>
-          
+
           <HStack mt={4}>
             <Button variant="ghost" onClick={() => navigate('/reception/search')}>
               Cancel
@@ -144,6 +177,7 @@ export default function CheckInView() {
     </ModuleLayout>
   );
 }
+
 
 
 

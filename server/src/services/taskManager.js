@@ -3,7 +3,8 @@
  * Handles automatic task creation and assignment for emergency obstetric workflow
  */
 
-const prisma = require('@prisma/client').PrismaClient;
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 class TaskManager {
   /**

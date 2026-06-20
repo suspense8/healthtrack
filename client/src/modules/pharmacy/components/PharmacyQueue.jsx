@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Badge, Button, 
+  Box, Heading, Table, Thead, Tbody, Tr, Th, Td, Badge, Button,
   HStack, Text, Spinner, Center, VStack, Divider, useToast,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, ModalFooter,
   FormControl, FormLabel, Input, Textarea, useDisclosure, Alert, AlertIcon,
@@ -72,10 +72,10 @@ export default function PharmacyQueue({ onDispenseComplete }) {
       }
 
       await api.patch(endpoint, body);
-      
+
       toast({
         title: actionType === 'dispense' ? 'Medication Dispensed' :
-               actionType === 'stockout' ? 'Marked as Stockout' : 'Prescription Cancelled',
+          actionType === 'stockout' ? 'Marked as Stockout' : 'Prescription Cancelled',
         status: actionType === 'dispense' ? 'success' : 'warning'
       });
 
@@ -96,9 +96,9 @@ export default function PharmacyQueue({ onDispenseComplete }) {
     const patientName = `${rx.patient.first_name} ${rx.patient.last_name}`.toLowerCase();
     const medication = rx.medication_name.toLowerCase();
     const queueNum = rx.visit?.queue_number?.toString() || '';
-    return patientName.includes(searchLower) || 
-           medication.includes(searchLower) || 
-           queueNum.includes(search);
+    return patientName.includes(searchLower) ||
+      medication.includes(searchLower) ||
+      queueNum.includes(search);
   });
 
   // Group prescriptions by patient/visit for easier dispensing
@@ -151,16 +151,16 @@ export default function PharmacyQueue({ onDispenseComplete }) {
       <HStack mb={4} spacing={4}>
         <InputGroup maxW="350px">
           <InputLeftElement><SearchIcon color="gray.400" /></InputLeftElement>
-          <Input 
-            placeholder="Search patient, medication, or queue #..." 
+          <Input
+            placeholder="Search patient, medication, or queue #..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             bg="white"
           />
         </InputGroup>
-        <Select 
-          w="180px" 
-          value={sortBy} 
+        <Select
+          w="180px"
+          value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
           bg="white"
         >
@@ -220,13 +220,13 @@ export default function PharmacyQueue({ onDispenseComplete }) {
                   const stockStatus = rx.stockStatus;
                   const isOutOfStock = stockStatus?.isOutOfStock;
                   const isLowStock = stockStatus?.isLowStock;
-                  
+
                   return (
-                  <Tr key={rx.prescription_id}>
-                    <Td fontWeight="bold">{rx.medication_name}</Td>
-                    <Td>{rx.dosage}</Td>
-                    <Td>{rx.frequency}</Td>
-                    <Td>{rx.duration}</Td>
+                    <Tr key={rx.prescription_id}>
+                      <Td fontWeight="bold">{rx.medication_name}</Td>
+                      <Td>{rx.dosage}</Td>
+                      <Td>{rx.frequency}</Td>
+                      <Td>{rx.duration}</Td>
                       <Td>
                         {stockStatus ? (
                           <VStack align="start" spacing={1}>
@@ -245,38 +245,38 @@ export default function PharmacyQueue({ onDispenseComplete }) {
                           <Text fontSize="xs" color="gray.400">Not tracked</Text>
                         )}
                       </Td>
-                    <Td>
-                      <HStack spacing={2}>
-                        <Button 
-                          size="xs" 
-                          colorScheme="green" 
-                          leftIcon={<CheckIcon />}
-                          onClick={() => openActionModal(rx, 'dispense')}
+                      <Td>
+                        <HStack spacing={2}>
+                          <Button
+                            size="xs"
+                            colorScheme="green"
+                            leftIcon={<CheckIcon />}
+                            onClick={() => openActionModal(rx, 'dispense')}
                             isDisabled={isOutOfStock}
-                        >
-                          Dispense
-                        </Button>
-                        <Button 
-                          size="xs" 
-                          colorScheme="orange" 
-                          variant="outline"
-                          leftIcon={<WarningIcon />}
-                          onClick={() => openActionModal(rx, 'stockout')}
-                        >
-                          Stockout
-                        </Button>
-                        <Button 
-                          size="xs" 
-                          colorScheme="red" 
-                          variant="ghost"
-                          leftIcon={<CloseIcon />}
-                          onClick={() => openActionModal(rx, 'cancel')}
-                        >
-                          Cancel
-                        </Button>
-                      </HStack>
-                    </Td>
-                  </Tr>
+                          >
+                            Dispense
+                          </Button>
+                          <Button
+                            size="xs"
+                            colorScheme="orange"
+                            variant="outline"
+                            leftIcon={<WarningIcon />}
+                            onClick={() => openActionModal(rx, 'stockout')}
+                          >
+                            Stockout
+                          </Button>
+                          <Button
+                            size="xs"
+                            colorScheme="red"
+                            variant="ghost"
+                            leftIcon={<CloseIcon />}
+                            onClick={() => openActionModal(rx, 'cancel')}
+                          >
+                            Cancel
+                          </Button>
+                        </HStack>
+                      </Td>
+                    </Tr>
                   );
                 })}
               </Tbody>
@@ -306,8 +306,8 @@ export default function PharmacyQueue({ onDispenseComplete }) {
                 {actionType === 'dispense' && (
                   <FormControl>
                     <FormLabel>Quantity Dispensed</FormLabel>
-                    <Input 
-                      type="number" 
+                    <Input
+                      type="number"
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       placeholder="Enter quantity"
@@ -333,10 +333,10 @@ export default function PharmacyQueue({ onDispenseComplete }) {
 
                 <FormControl>
                   <FormLabel>
-                    {actionType === 'dispense' ? 'Notes (optional)' : 
-                     actionType === 'stockout' ? 'Reason for Stockout' : 'Cancellation Reason'}
+                    {actionType === 'dispense' ? 'Notes (optional)' :
+                      actionType === 'stockout' ? 'Reason for Stockout' : 'Cancellation Reason'}
                   </FormLabel>
-                  <Textarea 
+                  <Textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder={actionType === 'stockout' ? 'e.g. Out of stock, awaiting delivery' : ''}
@@ -354,13 +354,13 @@ export default function PharmacyQueue({ onDispenseComplete }) {
           </ModalBody>
           <ModalFooter>
             <Button mr={3} onClick={onClose}>Cancel</Button>
-            <Button 
+            <Button
               colorScheme={actionType === 'dispense' ? 'green' : actionType === 'stockout' ? 'orange' : 'red'}
               onClick={handleAction}
               isLoading={processing}
             >
-              {actionType === 'dispense' ? 'Confirm Dispense' : 
-               actionType === 'stockout' ? 'Mark Stockout' : 'Confirm Cancel'}
+              {actionType === 'dispense' ? 'Confirm Dispense' :
+                actionType === 'stockout' ? 'Mark Stockout' : 'Confirm Cancel'}
             </Button>
           </ModalFooter>
         </ModalContent>

@@ -31,15 +31,15 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  
+
   // Default to 'analytics' if no tab specified
   const activeTab = tab || 'analytics';
-  
+
   // Navigate to tab
   const setActiveTab = (newTab) => {
     navigate(`/admin/${newTab}`);
   };
-  
+
   // Redirect to default if invalid tab
   useEffect(() => {
     const validTabs = ['analytics', 'patient-flow', 'staff', 'logs', 'export', 'users'];
@@ -47,11 +47,11 @@ export default function AdminDashboard() {
       navigate('/admin/analytics', { replace: true });
     }
   }, [tab, navigate]);
-  
+
   // Delete Dialog State
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
   const cancelRef = useRef();
-  
+
   // Create User Modal State
   const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCreateClose } = useDisclosure();
   const [newUser, setNewUser] = useState({ name: '', staff_id: '', password: '', role: 'doctor' });
@@ -115,10 +115,10 @@ export default function AdminDashboard() {
       setNewUser({ name: '', staff_id: '', password: '', role: 'doctor' });
       fetchUsers();
     } catch (error) {
-      toast({ 
-        title: 'Failed to create user', 
+      toast({
+        title: 'Failed to create user',
         description: error.response?.data?.error || 'Unknown error',
-        status: 'error' 
+        status: 'error'
       });
     } finally {
       setCreating(false);
@@ -146,7 +146,7 @@ export default function AdminDashboard() {
                 Create New User
               </Button>
             </HStack>
-            
+
             <Table variant="simple">
               <Thead>
                 <Tr>
@@ -249,34 +249,34 @@ export default function AdminDashboard() {
             <VStack spacing={4}>
               <FormControl isRequired>
                 <FormLabel>Name</FormLabel>
-                <Input 
+                <Input
                   value={newUser.name}
-                  onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                   placeholder="e.g. Dr. John Smith"
                 />
               </FormControl>
               <FormControl isRequired>
                 <FormLabel>Staff ID</FormLabel>
-                <Input 
+                <Input
                   value={newUser.staff_id}
-                  onChange={(e) => setNewUser({...newUser, staff_id: e.target.value})}
+                  onChange={(e) => setNewUser({ ...newUser, staff_id: e.target.value })}
                   placeholder="e.g. EMP001 or National ID"
                 />
               </FormControl>
               <FormControl isRequired>
                 <FormLabel>Password</FormLabel>
-                <Input 
+                <Input
                   type="password"
                   value={newUser.password}
-                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                   placeholder="Initial password"
                 />
               </FormControl>
               <FormControl isRequired>
                 <FormLabel>Role</FormLabel>
-                <Select 
+                <Select
                   value={newUser.role}
-                  onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                 >
                   <option value="doctor">Doctor</option>
                   <option value="nurse">Nurse</option>

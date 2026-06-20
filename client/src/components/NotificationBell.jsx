@@ -49,7 +49,7 @@ const NotificationBell = ({ role }) => {
       connect(role);
     }
     return () => disconnect();
-  }, [role]);
+  }, [role, connect, disconnect]);
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);

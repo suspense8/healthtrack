@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Box, Button, FormControl, FormLabel, Input, Select, VStack, SimpleGrid, 
+  Box, Button, FormControl, FormLabel, Input, Select, VStack, SimpleGrid,
   Heading, useToast, Textarea, Alert, AlertIcon, AlertTitle, AlertDescription,
   Switch, HStack, Badge, Divider
 } from '@chakra-ui/react';
@@ -21,9 +21,9 @@ export default function RegisterPatient({ onPatientRegistered }) {
     date_of_birth: '', age: null, gender: '', national_id: '',
     phone_number: '', email: '', address: '',
     emergency_contact_name: '', emergency_contact_phone: '',
-    
+
     // Standard specific
-    patient_type: 'Student', 
+    patient_type: 'Student',
     allergies: '', existing_conditions: '',
 
     // Emergency specific
@@ -32,7 +32,7 @@ export default function RegisterPatient({ onPatientRegistered }) {
     brought_by: 'Walk-in',
     time_of_arrival: new Date().toISOString().slice(0, 16)
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const toast = useToast();
@@ -41,7 +41,7 @@ export default function RegisterPatient({ onPatientRegistered }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
+
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => {
@@ -103,7 +103,7 @@ export default function RegisterPatient({ onPatientRegistered }) {
     if (!formData.last_name || formData.last_name.trim() === '') {
       validationErrors.last_name = 'Last name is required';
     }
-    
+
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       toast({ title: 'Validation Error', description: 'Please fill in all required fields', status: 'error' });
@@ -133,13 +133,13 @@ export default function RegisterPatient({ onPatientRegistered }) {
     try {
       const res = await api.post('/reception/patients', payload);
       const newPatient = res.data;
-      
-      toast({ 
-        title: 'Patient Registered Successfully', 
+
+      toast({
+        title: 'Patient Registered Successfully',
         description: `Patient ID: ${newPatient.patient_id}`,
-        status: 'success' 
+        status: 'success'
       });
-      
+
       if (onPatientRegistered) onPatientRegistered(newPatient);
       resetForm();
     } catch (error) {
@@ -151,9 +151,9 @@ export default function RegisterPatient({ onPatientRegistered }) {
 
   const handleEmergencySubmit = async () => {
     const timestamp = Date.now();
-    const emergencyName = formData.first_name || 
+    const emergencyName = formData.first_name ||
       `Unknown ${formData.gender || 'Patient'} ${timestamp}`;
-    
+
     const patientPayload = {
       first_name: emergencyName,
       last_name: 'EMERGENCY',
@@ -181,7 +181,7 @@ export default function RegisterPatient({ onPatientRegistered }) {
       };
 
       const visitRes = await api.post('/reception/checkin', checkInPayload);
-      
+
       toast({
         title: '🚨 EMERGENCY PATIENT REGISTERED',
         description: `Queue #${visitRes.data.queue_number} - ALERT TRIAGE NOW!`,
@@ -235,10 +235,10 @@ export default function RegisterPatient({ onPatientRegistered }) {
   };
 
   return (
-    <Box as="form" onSubmit={handleSubmit} p={4} borderWidth={1} borderRadius="lg" 
-         borderColor={isEmergency ? 'red.500' : 'gray.200'} 
-         bg={isEmergency ? 'red.50' : 'white'}
-         transition="all 0.3s"
+    <Box as="form" onSubmit={handleSubmit} p={4} borderWidth={1} borderRadius="lg"
+      borderColor={isEmergency ? 'red.500' : 'gray.200'}
+      bg={isEmergency ? 'red.50' : 'white'}
+      transition="all 0.3s"
     >
       <HStack justify="space-between" mb={6}>
         <Heading size="md" color={isEmergency ? 'red.600' : 'gray.700'}>
@@ -248,12 +248,12 @@ export default function RegisterPatient({ onPatientRegistered }) {
           <FormLabel htmlFor="emergency-mode" mb="0" fontWeight="bold" color={isEmergency ? 'red.600' : 'gray.600'}>
             Emergency Mode
           </FormLabel>
-          <Switch 
-            id="emergency-mode" 
-            colorScheme="red" 
+          <Switch
+            id="emergency-mode"
+            colorScheme="red"
             size="lg"
-            isChecked={isEmergency} 
-            onChange={handleEmergencyToggle} 
+            isChecked={isEmergency}
+            onChange={handleEmergencyToggle}
           />
         </FormControl>
       </HStack>
@@ -312,10 +312,10 @@ export default function RegisterPatient({ onPatientRegistered }) {
           <>
             <FormControl isRequired>
               <FormLabel>Estimated Age</FormLabel>
-              <Input 
-                name="estimated_age" 
-                value={formData.estimated_age} 
-                onChange={handleChange} 
+              <Input
+                name="estimated_age"
+                value={formData.estimated_age}
+                onChange={handleChange}
                 placeholder="e.g. 25-30 years"
                 bg="white"
               />
@@ -330,10 +330,10 @@ export default function RegisterPatient({ onPatientRegistered }) {
             </FormControl>
             <FormControl isRequired gridColumn={{ md: "span 2" }}>
               <FormLabel>Chief Complaint / Emergency Reason</FormLabel>
-              <Textarea 
-                name="chief_complaint" 
-                value={formData.chief_complaint} 
-                onChange={handleChange} 
+              <Textarea
+                name="chief_complaint"
+                value={formData.chief_complaint}
+                onChange={handleChange}
                 placeholder="e.g. Severe bleeding, Collapse, Difficulty breathing"
                 bg="white"
                 rows={2}
@@ -351,11 +351,11 @@ export default function RegisterPatient({ onPatientRegistered }) {
             </FormControl>
             <FormControl>
               <FormLabel>Time of Arrival</FormLabel>
-              <Input 
-                type="datetime-local" 
-                name="time_of_arrival" 
-                value={formData.time_of_arrival} 
-                onChange={handleChange} 
+              <Input
+                type="datetime-local"
+                name="time_of_arrival"
+                value={formData.time_of_arrival}
+                onChange={handleChange}
                 bg="white"
               />
             </FormControl>
@@ -365,10 +365,10 @@ export default function RegisterPatient({ onPatientRegistered }) {
           <>
             <FormControl>
               <FormLabel>Date of Birth</FormLabel>
-              <Input 
-                type="date" 
-                name="date_of_birth" 
-                value={formData.date_of_birth} 
+              <Input
+                type="date"
+                name="date_of_birth"
+                value={formData.date_of_birth}
                 onChange={handleChange}
                 bg="white"
               />
@@ -474,11 +474,11 @@ export default function RegisterPatient({ onPatientRegistered }) {
         )}
       </SimpleGrid>
 
-      <Button 
-        mt={6} 
-        colorScheme={isEmergency ? "red" : (isOnline ? "teal" : "orange")} 
-        type="submit" 
-        isLoading={loading} 
+      <Button
+        mt={6}
+        colorScheme={isEmergency ? "red" : (isOnline ? "teal" : "orange")}
+        type="submit"
+        isLoading={loading}
         width="full"
         size="lg"
       >

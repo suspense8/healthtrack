@@ -12,6 +12,10 @@ const {
   syncOfflineActions,
   getAppointmentsForToday
 } = require('./reception.controller');
+const {
+  registerEmergencyObstetric,
+  getEmergencyObstetricQueue
+} = require('../../controllers/emergencyObstetric.controller');
 const authenticateJWT = require('../shared/authenticateJWT');
 const authorizeRoles = require('../shared/authorizeRoles');
 
@@ -45,5 +49,9 @@ router.patch('/visits/:id/status', updateVisitStatus);
 router.get('/attendance-records', getAttendanceRecords);
 
 router.post('/sync', syncOfflineActions);
+
+// Emergency Obstetric
+router.post('/register-emergency-obstetric', registerEmergencyObstetric);
+router.get('/emergency-obstetric-queue', getEmergencyObstetricQueue);
 
 module.exports = router;

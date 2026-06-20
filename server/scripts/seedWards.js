@@ -101,6 +101,50 @@ async function seedWards() {
   }
 }
 
+/**
+ * Idempotent version — skips seeding if wards already exist.
+ * Safe to call on every startup.
+ */
+async function seedWardsIfEmpty() {
+  try {
+    const wardCount = await prisma.ward.count();
+    if (wardCount > 0) {
+      console.log(`Wards already seeded (${wardCount} wards found), skipping.`);
+      return;
+    }
+
+    console.log('No wards found. Seeding initial wards and beds...');
+
+    let totalWards = 0;
+    let totalBeds = 0;
+
+    for (const wardData of WARDS) {
+      const { beds, ...wardInfo } = wardData;
+
+      const ward = await prisma.ward.create({
+        data: wardInfo
+      });
+      totalWards++;
+
+      for (const bedNumber of beds) {
+        await prisma.bed.create({
+          data: {
+            ward_id: ward.ward_id,
+            bed_number: bedNumber,
+            status: 'Available'
+          }
+        });
+        totalBeds++;
+      }
+    }
+
+    console.log(`✅ Ward seeding complete! Created ${totalWards} wards with ${totalBeds} beds.`);
+  } catch (error) {
+    console.error('Ward seeding failed:', error.message);
+    // Don't throw — allow server to start even if ward seeding fails
+  }
+}
+
 // Run if called directly
 if (require.main === module) {
   seedWards()
@@ -111,4 +155,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { seedWards };
+module.exports = { seedWards, seedWardsIfEmpty };

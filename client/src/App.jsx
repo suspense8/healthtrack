@@ -4,6 +4,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
 import SettingsPage from './pages/SettingsPage';
+import HealthTrackLanding from './pages/healthtrack/Landing';
+import IntakeFlow from './pages/healthtrack/IntakeFlow';
+import WebConversation from './pages/healthtrack/WebConversation';
 import ReceptionDashboard from './modules/reception/pages/ReceptionDashboard';
 import NurseDashboard from './modules/nurses/pages/NurseDashboard';
 import DoctorDashboard from './modules/doctor/pages/DoctorDashboard';
@@ -24,6 +27,10 @@ import RejectAdmissionView from './modules/nurses/components/RejectAdmissionView
 import ConfirmDischargeView from './modules/nurses/components/ConfirmDischargeView';
 import AddNoteView from './modules/nurses/components/AddNoteView';
 import NursePatientHistoryView from './modules/nurses/components/PatientHistoryView';
+import ObstetricTriageWrapper from './modules/nurses/components/ObstetricTriageWrapper';
+import DeliveryRecordWrapper from './modules/nurses/components/DeliveryRecordWrapper';
+import ObstetricAdmitView from './modules/doctor/components/ObstetricAdmitView';
+import CommunityCaseDetail from './modules/nurses/components/CommunityCaseDetail';
 
 // Map module names to their expected roles
 const moduleRoles = {
@@ -57,6 +64,11 @@ const ProtectedRoute = ({ children, module }) => {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public HealthTrack Routes */}
+      <Route path="/healthtrack" element={<HealthTrackLanding />} />
+      <Route path="/healthtrack/intake" element={<IntakeFlow />} />
+      <Route path="/healthtrack/chat/:token" element={<WebConversation />} />
+
       {/* Module-specific login routes */}
       <Route path="/reception/login" element={<Login module="reception" />} />
       <Route path="/nurse/login" element={<Login module="nurse" />} />
@@ -203,6 +215,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/nurse/community-case/:caseId"
+        element={
+          <ProtectedRoute module="nurse">
+            <CommunityCaseDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/nurse/patient/:visitId"
         element={
           <ProtectedRoute module="nurse">
@@ -215,6 +235,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute module="nurse">
             <VitalsView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/obstetric-triage/:visitId"
+        element={
+          <ProtectedRoute module="nurse">
+            <ObstetricTriageWrapper />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/nurse/delivery/:visitId"
+        element={
+          <ProtectedRoute module="nurse">
+            <DeliveryRecordWrapper />
           </ProtectedRoute>
         }
       />
@@ -435,11 +471,11 @@ function AppRoutes() {
         }
       />
       
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/reception/login" replace />} />
+      {/* Default redirect to healthtrack landing instead of reception login */}
+      <Route path="/" element={<Navigate to="/healthtrack" replace />} />
       
       {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/reception/login" replace />} />
+      <Route path="*" element={<Navigate to="/healthtrack" replace />} />
     </Routes>
   );
 }

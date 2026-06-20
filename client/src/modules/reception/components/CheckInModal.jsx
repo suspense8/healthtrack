@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton,
   Button, FormControl, FormLabel, Input, Select, Switch, Textarea, useToast, VStack
@@ -9,11 +9,33 @@ import { useOffline } from '../../../context/OfflineContext';
 export default function CheckInModal({ isOpen, onClose, patient }) {
   const [visitReason, setVisitReason] = useState('');
   const [visitType, setVisitType] = useState('Walk-in');
+  const [appointments, setAppointments] = useState([]);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState('');
   const [isEmergency, setIsEmergency] = useState(false);
   const [referredBy, setReferredBy] = useState('');
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const { addOfflineAction, isOnline } = useOffline();
+
+  useEffect(() => {
+    if (isOpen && patient?.patient_id) {
+      const fetchAppointments = async () => {
+        try {
+          const res = await api.get('/reception/appointments/today');
+          const patientAppointments = res.data.filter(
+            appt => appt.patient_id === patient.patient_id
+          );
+          setAppointments(patientAppointments);
+          if (patientAppointments.length > 0) {
+            setSelectedAppointmentId(patientAppointments[0].appointment_id);
+          }
+        } catch (error) {
+          console.error("Failed to fetch appointments", error);
+        }
+      };
+      fetchAppointments();
+    }
+  }, [isOpen, patient]);
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -22,15 +44,16 @@ export default function CheckInModal({ isOpen, onClose, patient }) {
       visit_reason: visitReason,
       visit_type: visitType,
       is_emergency: isEmergency,
-      referred_by: referredBy || null
+      referred_by: referredBy || null,
+      appointment_id: visitType === 'Follow-up' && selectedAppointmentId ? selectedAppointmentId : null
     };
 
     try {
       const res = await api.post('/reception/checkin', payload);
-      toast({ 
-        title: 'Check-in successful', 
+      toast({
+        title: 'Check-in successful',
         description: `Queue Number: ${res.data.queue_number}`,
-        status: 'success' 
+        status: 'success'
       });
       onClose();
     } catch (error) {
@@ -57,34 +80,52 @@ export default function CheckInModal({ isOpen, onClose, patient }) {
               <FormLabel>Visit Type</FormLabel>
               <Select value={visitType} onChange={(e) => setVisitType(e.target.value)}>
                 <option value="Walk-in">Walk-in</option>
-                <option value="Appointment">Appointment</option>
+                {appointments.length > 0 && <option value="Follow-up">Follow-up (Scheduled)</option>}
+                <option value="Appointment">Other Appointment</option>
               </Select>
             </FormControl>
+
+            {visitType === 'Follow-up' && appointments.length > 0 && (
+              <FormControl>
+                <FormLabel>Select Appointment</FormLabel>
+                <Select
+                  value={selectedAppointmentId}
+                  onChange={(e) => setSelectedAppointmentId(e.target.value)}
+                >
+                  {appointments.map(appt => (
+                    <option key={appt.appointment_id} value={appt.appointment_id}>
+                      {new Date(appt.scheduled_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {appt.reason}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
             <FormControl isRequired>
               <FormLabel>Reason for Visit</FormLabel>
-              <Textarea 
-                placeholder="e.g. Fever, Headache, Checkup" 
-                value={visitReason} 
-                onChange={(e) => setVisitReason(e.target.value)} 
+              <Textarea
+                placeholder="e.g. Fever, Headache, Checkup"
+                value={visitReason}
+                onChange={(e) => setVisitReason(e.target.value)}
               />
             </FormControl>
             <FormControl>
               <FormLabel>Referred By (Optional)</FormLabel>
-              <Input 
+              <Input
                 placeholder="e.g. Dr. Smith, Clinic Name"
-                value={referredBy} 
-                onChange={(e) => setReferredBy(e.target.value)} 
+                value={referredBy}
+                onChange={(e) => setReferredBy(e.target.value)}
               />
             </FormControl>
             <FormControl display="flex" alignItems="center">
               <FormLabel htmlFor="emergency-switch" mb="0">
                 Is Emergency?
               </FormLabel>
-              <Switch 
-                id="emergency-switch" 
-                colorScheme="red" 
-                isChecked={isEmergency} 
-                onChange={(e) => setIsEmergency(e.target.checked)} 
+              <Switch
+                id="emergency-switch"
+                colorScheme="red"
+                isChecked={isEmergency}
+                onChange={(e) => setIsEmergency(e.target.checked)}
               />
             </FormControl>
           </VStack>

@@ -40,7 +40,7 @@ async function parseCSV() {
   return new Promise((resolve, reject) => {
     const records = [];
     const seen = new Set(); // Deduplicate by disease name
-    
+
     const parser = fs.createReadStream(CSV_PATH)
       .pipe(parse({
         columns: true,
@@ -51,7 +51,7 @@ async function parseCSV() {
     parser.on('data', (row) => {
       const name = row.DIM_GHECAUSE_TITLE?.trim();
       if (!name || seen.has(name)) return;
-      
+
       seen.add(name);
       records.push({
         name: name,
@@ -69,27 +69,27 @@ async function parseCSV() {
 async function seedDiseases() {
   try {
     console.log('Starting disease seeding process...\n');
-    
+
     // 1. Initialize embedding model
     await initializeEmbedder();
-    
+
     // 2. Parse CSV
     console.log('Parsing CSV file...');
     const diseases = await parseCSV();
     console.log(`Found ${diseases.length} unique diseases.\n`);
-    
+
     // 3. Clear existing diseases
     console.log('Clearing existing disease records...');
     await prisma.$executeRaw`TRUNCATE TABLE diseases RESTART IDENTITY`;
     console.log('Done.\n');
-    
+
     // 4. Process in batches
     console.log(`Processing ${diseases.length} diseases in batches of ${BATCH_SIZE}...`);
     let processed = 0;
-    
+
     for (let i = 0; i < diseases.length; i += BATCH_SIZE) {
       const batch = diseases.slice(i, i + BATCH_SIZE);
-      
+
       for (const disease of batch) {
         // Combine name + description + extract for embedding
         const textForEmbedding = [
@@ -97,11 +97,11 @@ async function seedDiseases() {
           disease.description,
           disease.extract?.substring(0, 1000) // Limit extract length
         ].filter(Boolean).join('. ');
-        
+
         try {
           const embedding = await generateEmbedding(textForEmbedding);
           const embeddingStr = formatEmbeddingForPg(embedding);
-          
+
           await prisma.$executeRaw`
             INSERT INTO diseases (name, description, extract, wikipedia_url, embedding, created_at)
             VALUES (
@@ -113,18 +113,18 @@ async function seedDiseases() {
               NOW()
             )
           `;
-          
+
           processed++;
         } catch (err) {
           console.error(`Error processing "${disease.name}":`, err.message);
         }
       }
-      
+
       console.log(`  Processed ${Math.min(processed, diseases.length)}/${diseases.length} diseases...`);
     }
-    
+
     console.log(`\n✅ Seeding complete! Inserted ${processed} diseases with embeddings.`);
-    
+
   } catch (error) {
     console.error('Seeding failed:', error);
     throw error;
@@ -143,4 +143,70 @@ if (require.main === module) {
     });
 }
 
-module.exports = { seedDiseases, generateEmbedding };
+/**
+ * Idempotent version — skips seeding if diseases table already has rows.
+ * Uses the same embedding logic but does NOT truncate first.
+ * Safe to call on every startup (runs in background after server is listening).
+ */
+async function seedDiseasesIfEmpty() {
+  try {
+    const count = await prisma.$queryRaw`SELECT COUNT(*)::int AS c FROM diseases`;
+    const existing = count[0]?.c ?? 0;
+    if (existing > 0) {
+      console.log(`🌱 Diseases already seeded (${existing} records found), skipping.`);
+      return;
+    }
+
+    console.log('🌱 No diseases found. Starting background disease seeding (this may take a while)...');
+
+    // Parse CSV first (no model needed)
+    const diseases = await parseCSV();
+    console.log(`🌱 Found ${diseases.length} unique diseases in CSV. Loading embedding model...`);
+
+    // Only load the model when we actually need it
+    await initializeEmbedder();
+
+    let processed = 0;
+    for (let i = 0; i < diseases.length; i += BATCH_SIZE) {
+      const batch = diseases.slice(i, i + BATCH_SIZE);
+      for (const disease of batch) {
+        const textForEmbedding = [
+          disease.name,
+          disease.description,
+          disease.extract?.substring(0, 1000)
+        ].filter(Boolean).join('. ');
+
+        try {
+          const embedding = await generateEmbedding(textForEmbedding);
+          const embeddingStr = formatEmbeddingForPg(embedding);
+
+          await prisma.$executeRaw`
+            INSERT INTO diseases (name, description, extract, wikipedia_url, embedding, created_at)
+            VALUES (
+              ${disease.name},
+              ${disease.description},
+              ${disease.extract || null},
+              ${disease.wikipedia_url},
+              ${embeddingStr}::vector,
+              NOW()
+            )
+            ON CONFLICT DO NOTHING
+          `;
+          processed++;
+        } catch (err) {
+          console.error(`🌱 Error inserting "${disease.name}":`, err.message);
+        }
+      }
+      if ((i / BATCH_SIZE) % 5 === 0) {
+        console.log(`🌱 Diseases: ${Math.min(processed, diseases.length)}/${diseases.length} seeded...`);
+      }
+    }
+
+    console.log(`✅ Disease seeding complete! Inserted ${processed} diseases with vector embeddings.`);
+  } catch (error) {
+    console.error('Disease seeding failed:', error.message);
+    // Don't throw — server continues running
+  }
+}
+
+module.exports = { seedDiseases, seedDiseasesIfEmpty, generateEmbedding };

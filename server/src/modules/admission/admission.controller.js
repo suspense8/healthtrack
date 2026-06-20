@@ -165,16 +165,17 @@ const getPendingAdmissions = async (req, res) => {
 
 const acceptAdmission = async (req, res) => {
   const { id } = req.params;
-  const { bed_id, nurse_notes } = req.body;
+  const { ward_id, bed_id, nurse_notes } = req.body;
 
   try {
     // Start transaction
     const [admission, bed] = await prisma.$transaction(async (tx) => {
-      // Update admission
+      // Update admission with ward and bed assignment
       const adm = await tx.admission.update({
         where: { admission_id: parseInt(id) },
         data: {
           admission_status: 'Admitted',
+          ward_id: ward_id ? parseInt(ward_id) : undefined,
           bed_id,
           nurse_id: req.user.userId,
           admitted_at: new Date()
@@ -229,13 +230,27 @@ const rejectAdmission = async (req, res) => {
       }
     });
 
-    // Update attendance log
+    // Update attendance log - send patient back to doctor queue
     await prisma.attendanceLog.update({
       where: { visit_id: admission.visit_id },
-      data: { queue_status: 'Admission Rejected' }
+      data: { 
+        queue_status: 'Ready for Doctor',  // Return to doctor queue
+        notes: `Admission rejected: ${reason || 'No bed available'}. Patient returned to doctor for alternative disposition.`
+      }
     });
 
-    res.json({ message: 'Admission rejected', admission });
+    // Notify doctor
+    const io = req.app.get('io');
+    if (io) {
+      io.to('doctor').emit('admission:rejected', {
+        visitId: admission.visit_id,
+        patientId: admission.patient_id,
+        reason: reason || 'No bed available',
+        message: 'Admission rejected - patient returned to your queue'
+      });
+    }
+
+    res.json({ message: 'Admission rejected - patient returned to doctor queue', admission });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to reject admission' });
